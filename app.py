@@ -34,9 +34,9 @@ def generate_kpis_from_openai(prompt_content):
     **Instructions:**
     - **Output Format:** JSON array.
     - **Structure:** Each KPI should be a JSON object with the following keys:
-      - `"name"`: The name of the KPI.
-      - `"description"`: What it measures and why it's important.
-      - `"guidance"`: How to set targets and use it.
+      - "name": The name of the KPI.
+      - "description": What it measures and why it's important.
+      - "guidance": How to set targets and use it.
     - **No Additional Text:** The response should contain only the JSON array without any additional explanations, text, or annotations.
 
     **Business Scenario:**
@@ -45,18 +45,18 @@ def generate_kpis_from_openai(prompt_content):
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4",  # Switch to GPT-4
+            model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=2000,  # Increase max_tokens for longer responses
+            max_tokens=2000,
             temperature=0.7
         )
 
         # Debugging: Log the raw API response
-        st.write("Raw API Response:", response)
+        # st.write("Raw API Response:", response)  # Uncomment for debugging
 
         # Extract content from the response
         content = response.choices[0].message.content.strip()
-        st.write("Processed Content:", content)  # Debug processed content
+        # st.write("Processed Content:", content)  # Uncomment for debugging
 
         # Attempt to parse JSON from the content
         kpi_list = json.loads(content)
@@ -72,6 +72,66 @@ def generate_kpis_from_openai(prompt_content):
     except Exception as e:
         st.error(f"Unexpected error: {e}")
         return []
+
+def generate_imaginary_data(kpi_name, scenario_strength):
+    """Generate imaginary data for a KPI based on a scenario strength."""
+    prompt = f"""
+    You are an expert data scientist. Generate an artificial dataset for a KPI named "{kpi_name}".
+    The dataset should represent a {scenario_strength} performance scenario over 12 time periods.
+    Format the output as a JSON array of objects with the following structure:
+    [
+        {{"time_period": "Time Period 1", "value": <numeric_value>}},
+        {{"time_period": "Time Period 2", "value": <numeric_value>}},
+        ...
+    ]
+    Ensure the values align with a {scenario_strength} performance.
+    """
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=500,
+            temperature=0.7
+        )
+        content = response.choices[0].message.content.strip()
+        # Convert JSON response to DataFrame
+        data = json.loads(content)
+        return pd.DataFrame.from_records(data)
+    except json.JSONDecodeError as e:
+        st.error(f"JSON decode error while generating imaginary data: {e}")
+        return pd.DataFrame(columns=["time_period", "value"])
+    except openai.error.OpenAIError as e:
+        st.error(f"OpenAI API error while generating imaginary data: {e}")
+        return pd.DataFrame(columns=["time_period", "value"])
+    except Exception as e:
+        st.error(f"Unexpected error while generating imaginary data: {e}")
+        return pd.DataFrame(columns=["time_period", "value"])
+
+def explain_kpis(kpi_structs):
+    """Generate detailed explanations for each KPI using OpenAI."""
+    explanations = {}
+    for kpi in kpi_structs:
+        prompt = f"""
+        Provide a detailed explanation for the following KPI:
+
+        KPI Name: {kpi['name']}
+        Description: {kpi['description']}
+        Guidance: {kpi['guidance']}
+        """
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=500,
+                temperature=0.7
+            )
+            content = response.choices[0].message.content.strip()
+            explanations[kpi['name']] = content
+        except openai.error.OpenAIError as e:
+            explanations[kpi['name']] = f"Error generating explanation: {e}"
+        except Exception as e:
+            explanations[kpi['name']] = f"Unexpected error: {e}"
+    return explanations
 
 def plot_kpi_chart(kpi_name, data_points):
     """Generate a trend chart for a specific KPI."""
@@ -118,15 +178,18 @@ def export_kpis_pdf(kpi_list):
     return pdf_output
 
 # Main Streamlit App
+st.set_page_config(page_title="KPI Creation and Tracking Kit", layout="wide")
 st.title("KPI Creation and Tracking Kit")
 st.write("Generate meaningful KPIs tailored to your pilot phase, understand them with OpenAI, and track their progress over time.")
 
+# Tabs
 tabs = st.tabs(["KPI Builder", "KPI Tracker", "KPI Explanations", "Export KPIs"])
 
 # KPI Builder Tab
 with tabs[0]:
     st.header("KPI Builder")
     with st.form("kpi_builder_form"):
+        # Industry Selection
         industry = st.selectbox("What industry are you in?", [
             "Manufacturing",
             "Retail",
@@ -146,16 +209,23 @@ with tabs[0]:
         if industry == "Other (Please Specify)":
             industry = st.text_input("Please specify your industry:")
         
+        # Product Audience
         product_audience = st.selectbox("What is your product audience?", ["B2B", "B2C", "B2B2C", "Internal", "Other"])
         if product_audience == "Other":
             product_audience = st.text_input("Please specify your product audience:")
         
+        # Geography
         geography = st.selectbox("What is your target launch geography?", ["Local", "Regional", "National", "Global", "Other"])
         if geography == "Other":
             geography = st.text_input("Please specify your target launch geography:")
         
+        # Target Audience Description
         target_audience = st.text_input("In one phrase, describe your target audience (e.g., small business owners, millennial travelers)")
+        
+        # Existing Customer Base
         sell_to_audience = st.radio("Do you already sell other products/services to your target audience?", ["Yes", "No"])
+        
+        # Offering Type
         offering_type = st.selectbox("What are you offering?", [
             "Physical product",
             "Digital app",
@@ -168,6 +238,7 @@ with tabs[0]:
         if offering_type == "Other":
             offering_type = st.text_input("Please specify your offering type:")
         
+        # Business Goal
         business_goal = st.selectbox("What is your primary business goal?", [
             "Revenue growth",
             "Improved profitability",
@@ -180,8 +251,13 @@ with tabs[0]:
         if business_goal == "Other":
             business_goal = st.text_input("Please specify your primary business goal:")
         
+        # Benefit Statement
         benefit_statement = st.text_input("What problem is your offer trying to solve?")
+        
+        # Timeframe
         timeframe = st.selectbox("When do you need to see success by?", ["1-3 months", "3-6 months", "6-12 months", "12+ months"])
+        
+        # Budget
         budget = st.selectbox("What’s your approximate budget for launching and running the pilot?", [
             "Less than $1m",
             "$1m–$5m",
@@ -190,12 +266,14 @@ with tabs[0]:
             "> $20m",
         ])
         
+        # Pilot Phase
         pilot_phase = st.radio("Where are you in your pilot journey?", [
             "Proof of Concept (POC)",
             "Closed Beta",
             "Public MVP",
         ])
         
+        # Submit Button
         submitted = st.form_submit_button("Generate KPI Suggestions")
         if submitted:
             prompt_info = f"""
@@ -219,6 +297,7 @@ with tabs[0]:
             else:
                 st.error("Failed to generate KPIs. Please try again.")
 
+    # Display Suggested KPIs
     if st.session_state.kpi_suggestions:
         st.subheader("Suggested KPIs")
         # Allow users to select KPIs
@@ -234,6 +313,7 @@ with tabs[0]:
                     selected_struct.append(kpi)
                     break
         
+        # Update session state with selected KPIs
         st.session_state.selected_kpis_struct = selected_struct
         
         # Save selected KPIs
@@ -247,35 +327,82 @@ with tabs[1]:
     if not st.session_state.selected_kpis_struct:
         st.info("No KPIs selected yet. Go to the 'KPI Builder' tab to generate and select KPIs first.")
     else:
-        st.subheader("Your Selected KPIs")
         for idx, kpi in enumerate(st.session_state.selected_kpis_struct, 1):
             st.markdown(f"### {idx}. {kpi['name']}")
             st.write(f"**Description:** {kpi['description']}")
             st.write(f"**Guidance:** {kpi['guidance']}")
             
-            # Initialize KPI data in session_state if not present
-            if kpi['name'] not in st.session_state.kpi_data:
-                st.session_state.kpi_data[kpi['name']] = pd.DataFrame(columns=["Time Period", "Value"])
+            # Data Management Options
+            data_option = st.radio(
+                f"How would you like to manage data for '{kpi['name']}'?",
+                ["Upload Data", "Generate Imaginary Data", "Manually Add Data"],
+                key=f"data_option_{kpi['name']}"
+            )
+
+            # Upload Data
+            if data_option == "Upload Data":
+                uploaded_file = st.file_uploader(f"Upload data for '{kpi['name']}'", type=["csv", "xlsx"], key=f"upload_{kpi['name']}")
+                if uploaded_file:
+                    try:
+                        if uploaded_file.name.endswith(".csv"):
+                            df = pd.read_csv(uploaded_file)
+                        else:
+                            df = pd.read_excel(uploaded_file)
+                        # Validate required columns
+                        if set(['time_period', 'value']).issubset(df.columns.str.lower()):
+                            df.columns = [col.lower() for col in df.columns]
+                            st.session_state.kpi_data[kpi['name']] = df.rename(columns={'value': 'Value'})
+                            st.success(f"Data uploaded successfully for '{kpi['name']}'")
+                            st.dataframe(df)
+                        else:
+                            st.error("Uploaded file must contain 'time_period' and 'value' columns.")
+                    except Exception as e:
+                        st.error(f"Error reading uploaded file: {e}")
+
+            # Generate Imaginary Data
+            elif data_option == "Generate Imaginary Data":
+                scenario_strength = st.selectbox(
+                    f"Select a scenario strength for '{kpi['name']}'",
+                    ["Weak", "Medium", "Strong"],
+                    key=f"scenario_strength_{kpi['name']}"
+                )
+                if st.button(f"Generate Data for '{kpi['name']}'", key=f"generate_{kpi['name']}"):
+                    with st.spinner("Generating data..."):
+                        df = generate_imaginary_data(kpi['name'], scenario_strength)
+                    if not df.empty:
+                        df.columns = ['Time Period', 'Value']
+                        st.session_state.kpi_data[kpi['name']] = df
+                        st.success(f"Imaginary data generated successfully for '{kpi['name']}'")
+                        st.dataframe(df)
+
+            # Manually Add Data
+            elif data_option == "Manually Add Data":
+                with st.expander(f"Add Data for {kpi['name']}"):
+                    time_period = st.text_input(f"Time Period for {kpi['name']} (e.g., Q1 2024)", key=f"time_{kpi['name']}")
+                    value = st.number_input(f"Value for {kpi['name']}", key=f"value_{kpi['name']}")
+                    if st.button(f"Add Data Point for '{kpi['name']}'", key=f"add_{kpi['name']}"):
+                        if time_period and value is not None:
+                            new_data = pd.DataFrame({"Time Period": [time_period], "Value": [value]})
+                            if kpi['name'] in st.session_state.kpi_data:
+                                st.session_state.kpi_data[kpi['name']] = pd.concat([st.session_state.kpi_data[kpi['name']], new_data], ignore_index=True)
+                            else:
+                                st.session_state.kpi_data[kpi['name']] = new_data
+                            st.success(f"Data point added for '{kpi['name']}'")
+                        else:
+                            st.error("Please provide both Time Period and Value.")
             
-            # Input for new data point
-            with st.expander(f"Add Data for {kpi['name']}"):
-                time_period = st.text_input(f"Time Period for {kpi['name']} (e.g., Q1 2024)", key=f"time_{kpi['name']}")
-                value = st.number_input(f"Value for {kpi['name']}", key=f"value_{kpi['name']}")
-                if st.button(f"Add Data Point for {kpi['name']}", key=f"add_{kpi['name']}"):
-                    if time_period and value is not None:
-                        new_data = pd.DataFrame({"Time Period": [time_period], "Value": [value]})
-                        st.session_state.kpi_data[kpi['name']] = pd.concat([st.session_state.kpi_data[kpi['name']], new_data], ignore_index=True)
-                        st.success(f"Data point added for {kpi['name']}")
-                    else:
-                        st.error("Please provide both Time Period and Value.")
-            
-            # Display data table
-            st.write(f"**Data for {kpi['name']}**")
-            st.dataframe(st.session_state.kpi_data[kpi['name']])
-            
-            # Plot KPI chart
-            if not st.session_state.kpi_data[kpi['name']].empty:
-                fig = plot_kpi_chart(kpi['name'], st.session_state.kpi_data[kpi['name']])
+            # Display Data and Plot
+            if kpi['name'] in st.session_state.kpi_data:
+                df = st.session_state.kpi_data[kpi['name']]
+                st.write(f"### Data for '{kpi['name']}'")
+                st.dataframe(df)
+                # Plotting
+                fig, ax = plt.subplots()
+                ax.plot(df['Time Period'], df['Value'], marker='o')
+                ax.set_title(f"Trend for '{kpi['name']}'")
+                ax.set_xlabel("Time Period")
+                ax.set_ylabel("Value")
+                plt.xticks(rotation=45)
                 st.pyplot(fig)
 
 # KPI Explanations Tab
@@ -283,7 +410,7 @@ with tabs[2]:
     st.header("KPI Explanations")
     
     # Debugging: Check if selected_kpis_struct is populated
-    st.write("Selected KPIs Struct:", st.session_state.get("selected_kpis_struct", "Not Set"))
+    # st.write("Selected KPIs Struct:", st.session_state.get("selected_kpis_struct", "Not Set"))  # Uncomment for debugging
     
     if not st.session_state.get("selected_kpis_struct"):
         st.info("No KPIs selected yet. Go to the 'KPI Builder' tab to generate and select KPIs first.")
@@ -293,12 +420,14 @@ with tabs[2]:
                 with st.spinner("Generating KPI explanations..."):
                     explanations = explain_kpis(st.session_state.selected_kpis_struct)
                     st.session_state.kpi_explanations = explanations
-            st.markdown(st.session_state.kpi_explanations)
+            # Display explanations
+            for kpi_name, explanation in st.session_state.kpi_explanations.items():
+                st.markdown(f"### {kpi_name}")
+                st.write(explanation)
         except NameError as e:
             st.error(f"Function not defined: {e}")
         except Exception as e:
             st.error(f"Unexpected error: {e}")
-
 
 # Export KPIs Tab
 with tabs[3]:
@@ -338,4 +467,3 @@ with tabs[3]:
             file_name="kpis.pdf",
             mime="application/pdf"
         )
-
