@@ -87,7 +87,7 @@ def generate_poc_outputs(industry, product_audience, offering_type, budget):
     st.write("3. Cost-to-benefit ratio of prototype execution")
     st.write("**Benchmarks:** Industry-specific adoption or feasibility success rates.")
     st.write("**Risk Radar:** High R&D costs, lack of internal alignment, or unclear value propositions.")
-    st.write("**Sources:** Data sourced from industry reports and case studies in the {industry} sector.")
+    st.write(f"**Sources:** Data sourced from industry reports and case studies in the {industry} sector.")
 
 
 def generate_beta_outputs(product_audience, geography, target_audience):
@@ -99,7 +99,7 @@ def generate_beta_outputs(product_audience, geography, target_audience):
     st.write("3. Bug or issue resolution time")
     st.write("**Benchmarks:** Industry averages for closed beta adoption and satisfaction rates.")
     st.write(f"**Risk Radar:** Challenges in feedback collection or representative user selection for {product_audience} in {geography}.")
-    st.write("**Sources:** Feedback analysis from successful beta launches for similar audiences like {target_audience}.")
+    st.write(f"**Sources:** Feedback analysis from successful beta launches for similar audiences like {target_audience}.")
 
 
 def generate_mvp_outputs(business_goal, timeframe, geography):
@@ -108,7 +108,7 @@ def generate_mvp_outputs(business_goal, timeframe, geography):
     st.write("**Top 3 KPIs:**")
     st.write("1. Market adoption rate (e.g., % of target audience using the MVP)")
     st.write("2. Revenue or profitability (aligned with primary business goal)")
-    st.write("3. Retention rate over initial time period ({timeframe})")
+    st.write(f"3. Retention rate over initial time period ({timeframe})")
     st.write("**Benchmarks:** Market penetration rates and revenue targets for public MVPs in similar geographies.")
     st.write(f"**Risk Radar:** Scaling challenges, regulatory issues in {geography}, or failure to meet {business_goal} expectations.")
     st.write("**Sources:** Market analysis and benchmark studies.")
@@ -116,3 +116,4 @@ def generate_mvp_outputs(business_goal, timeframe, geography):
 
 if __name__ == "__main__":
     main()
+
