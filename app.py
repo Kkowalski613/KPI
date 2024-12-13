@@ -25,9 +25,7 @@ if "kpi_data" not in st.session_state:
 def generate_kpis_from_openai(prompt_content):
     prompt = f"""
     You are an expert on KPIs. Based on the following business scenario, 
-    suggest at least 5 relevant KPIs that align with the indicated pilot stage. 
-    The KPIs should reflect the sophistication and focus expected for that stage.
-
+    suggest at least 5 relevant KPIs that align with the indicated pilot stage.
     Format each KPI as follows:
     <index>. KPI Name: <KPI_Name>
        Description: <What it measures and why it's important>
@@ -42,15 +40,16 @@ def generate_kpis_from_openai(prompt_content):
     - Public MVP: Focus on market adoption, scalability, revenue.
     """
     try:
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=prompt,
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
             max_tokens=800,
             temperature=0.7
         )
-        return response.choices[0].text.strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
         return f"Error calling OpenAI API: {e}"
+
 
 def explain_kpis(kpi_list):
     prompt = f"""
@@ -64,13 +63,13 @@ def explain_kpis(kpi_list):
     Remember to consider the pilot stage mentioned previously and how that stage influences the KPI's usage.
     """
     try:
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=prompt,
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
             max_tokens=1000,
             temperature=0.7
         )
-        return response.choices[0].text.strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
         return f"Error calling OpenAI API: {e}"
 
