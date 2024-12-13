@@ -145,6 +145,9 @@ def export_kpis_pdf(kpi_list):
 st.title("KPI Creation and Tracking Kit")
 st.write("Generate meaningful KPIs tailored to your pilot phase, understand them with OpenAI, and track their progress over time. You can also export your KPIs in multiple formats.")
 
+st.write(st.secrets)
+
+
 tabs = st.tabs(["KPI Builder", "KPI Tracker"])
 
 # ------------------- KPI BUILDER TAB -------------------
