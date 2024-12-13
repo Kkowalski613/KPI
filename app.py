@@ -2,16 +2,37 @@ import streamlit as st
 import openai
 import os
 import io
-import csv
+import pandas as pd
+import matplotlib.pyplot as plt
 import json
+from fpdf import FPDF
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-def explain_kpi(prompt_content):
+# Initialize session state
+if "kpi_suggestions" not in st.session_state:
+    st.session_state.kpi_suggestions = []
+if "selected_kpis" not in st.session_state:
+    # Will store the raw chosen lines
+    st.session_state.selected_kpis = []
+if "selected_kpis_struct" not in st.session_state:
+    # Will store structured data: [{"name":..., "description":..., "guidance":...}, ...]
+    st.session_state.selected_kpis_struct = []
+if "kpi_data" not in st.session_state:
+    # Dictionary to hold KPI data points: {kpi_name: [values]}
+    st.session_state.kpi_data = {}
+
+def generate_kpis_from_openai(prompt_content):
     prompt = f"""
-    You are an expert on KPIs. Consider the following KPI configuration and pilot phase details:
+    You are an expert on KPIs. Based on the following business scenario, 
+    suggest at least 5 relevant KPIs. 
+    For each KPI, follow this format exactly:
+    <index>. KPI Name: <KPI_Name>
+       Description: <What it measures and why it's important>
+       Guidance: <How to set targets and use it>
+
+    Scenario:
     {prompt_content}
-    Provide a thorough explanation of what each KPI measures, how it can be used, and strict guidelines for its use.
     """
     try:
         response = openai.Completion.create(
@@ -22,175 +43,255 @@ def explain_kpi(prompt_content):
         )
         return response.choices[0].text.strip()
     except Exception as e:
-        return f"Error with OpenAI API: {e}"
+        return f"Error calling OpenAI API: {e}"
 
-def main():
-    st.title("KPI Creation Kit")
-    st.write("Welcome to the KPI Creation Kit! This tool helps you define key metrics for your pilot phases.")
+def explain_kpis(kpi_list):
+    prompt = f"""
+    You are an expert on KPIs. Provide a thorough explanation for each of the following KPIs:
+    {kpi_list}
+    For each KPI:
+    - Explain what it measures in-depth.
+    - How it can be practically applied.
+    - Common benchmarks or targets.
+    - Potential pitfalls or misinterpretations.
+    """
+    try:
+        response = openai.Completion.create(
+            engine="text-davinci-003",
+            prompt=prompt,
+            max_tokens=800,
+            temperature=0.7
+        )
+        return response.choices[0].text.strip()
+    except Exception as e:
+        return f"Error calling OpenAI API: {e}"
 
-    # Step 1: Survey
-    st.header("Step 1: Survey")
-    industry = st.selectbox("What industry are you in?", [
-        "Manufacturing",
-        "Retail",
-        "Technology",
-        "Healthcare",
-        "Transportation & Logistics",
-        "Marketing & Advertising",
-        "Finance & Insurance",
-        "Consumer Goods",
-        "Education",
-        "Government & Public Sector",
-        "Energy & Utilities",
-        "Hospitality & Travel",
-        "Other (Please Specify)",
-    ])
+def plot_kpi_chart(kpi_name, data_points):
+    fig, ax = plt.subplots()
+    ax.plot(data_points, marker='o')
+    ax.set_title(f"KPI: {kpi_name}")
+    ax.set_xlabel("Time Period")
+    ax.set_ylabel("Value")
+    fig.tight_layout()
+    return fig
 
-    product_audience = st.selectbox("What is your product audience?", ["B2B", "B2C", "B2B2C", "Internal", "Other"])
-    geography = st.selectbox("What is your target launch geography?", ["Local", "Regional", "National", "Global", "Other"])
-    target_audience = st.text_input("Describe your target audience")
-    sell_to_audience = st.radio("Do you already sell other products/services to this audience?", ["Yes", "No"])
-    offering_type = st.selectbox("What are you offering?", [
-        "Physical product",
-        "Digital app",
-        "SaaS",
-        "Service",
-        "Hybrid physical/digital product",
-        "Subscription-based product",
-        "Other",
+def parse_selected_kpis(kpi_lines):
+    """
+    Parse the selected KPI lines into a structured format:
+    [{"name": <KPI_Name>, "description": <Desc>, "guidance": <Guidance>}, ...]
+    """
+    kpis = []
+    current_kpi = {}
+    for line in kpi_lines:
+        line_stripped = line.strip()
+        if line_stripped.lower().startswith("description:"):
+            current_kpi["description"] = line_stripped.split("Description:",1)[1].strip()
+        elif line_stripped.lower().startswith("guidance:"):
+            current_kpi["guidance"] = line_stripped.split("Guidance:",1)[1].strip()
+        elif "KPI Name:" in line_stripped:
+            # If there's an ongoing KPI, push it first
+            if current_kpi:
+                kpis.append(current_kpi)
+                current_kpi = {}
+            # Start a new KPI
+            parts = line_stripped.split("KPI Name:",1)
+            if len(parts) > 1:
+                current_kpi["name"] = parts[1].strip()
+        elif line_stripped[0].isdigit() and ". " in line_stripped:
+            # This might be a line that starts the KPI definition
+            # but KPI Name line will also appear, so we rely on that.
+            continue
+    # Add the last one if not empty
+    if current_kpi:
+        kpis.append(current_kpi)
+    return kpis
+
+def export_kpis_csv(kpi_list):
+    # kpi_list: [{"name":..., "description":..., "guidance":...}, ...]
+    df = pd.DataFrame(kpi_list)
+    return df.to_csv(index=False)
+
+def export_kpis_json(kpi_list):
+    return json.dumps(kpi_list, indent=4)
+
+def export_kpis_text(kpi_list):
+    text_lines = []
+    for kpi in kpi_list:
+        text_lines.append(f"KPI: {kpi['name']}")
+        text_lines.append(f"Description: {kpi['description']}")
+        text_lines.append(f"Guidance: {kpi['guidance']}\n")
+    return "\n".join(text_lines)
+
+def export_kpis_pdf(kpi_list):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(0, 10, "Selected KPIs", ln=True, align='C')
+    pdf.ln(10)
+    for kpi in kpi_list:
+        pdf.set_font("Arial", 'B', 12)
+        pdf.multi_cell(0, 10, f"KPI: {kpi['name']}")
+        pdf.set_font("Arial", '', 12)
+        pdf.multi_cell(0, 10, f"Description: {kpi['description']}")
+        pdf.multi_cell(0, 10, f"Guidance: {kpi['guidance']}\n")
+    pdf_output = pdf.output(dest='S').encode('latin-1')  # Return as bytes
+    return pdf_output
+
+st.title("KPI Creation and Tracking Kit")
+st.write("Generate meaningful KPIs, understand them with OpenAI, and track their progress over time. Also export your KPIs in multiple formats.")
+
+tabs = st.tabs(["KPI Builder", "KPI Tracker"])
+
+# ------------------- KPI BUILDER TAB -------------------
+with tabs[0]:
+    st.header("KPI Builder")
+
+    st.write("Provide context to generate meaningful KPIs:")
+    industry = st.selectbox("Industry:", [
+        "Manufacturing", "Retail", "Technology", "Healthcare",
+        "Transportation & Logistics", "Marketing & Advertising",
+        "Finance & Insurance", "Consumer Goods", "Education",
+        "Government & Public Sector", "Energy & Utilities",
+        "Hospitality & Travel", "Other"
     ])
-    business_goal = st.selectbox("Primary business goal:", [
-        "Revenue growth",
-        "Improved profitability",
-        "Market share expansion",
-        "Customer acquisition",
-        "Brand loyalty/engagement",
-        "Sustainability or ESG-related goals",
-        "Other",
+    product_audience = st.selectbox("Product Audience:", ["B2B", "B2C", "B2B2C", "Internal", "Other"])
+    geography = st.selectbox("Target Launch Geography:", ["Local", "Regional", "National", "Global", "Other"])
+    target_audience = st.text_input("Describe your target audience:")
+    offering_type = st.selectbox("Offering Type:", [
+        "Physical product", "Digital app", "SaaS", "Service",
+        "Hybrid physical/digital product", "Subscription-based product", "Other"
     ])
-    benefit_statement = st.text_input("What problem does your offer solve?")
+    business_goal = st.selectbox("Primary Business Goal:", [
+        "Revenue growth", "Improved profitability", "Market share expansion",
+        "Customer acquisition", "Brand loyalty/engagement", "Sustainability or ESG-related goals",
+        "Other"
+    ])
     timeframe = st.selectbox("Timeframe for success:", ["1-3 months", "3-6 months", "6-12 months", "12+ months"])
-    budget = st.selectbox("Approximate budget:", [
-        "Less than $1m",
-        "$1m–$5m",
-        "$5m–$10m",
-        "$10m–$20m",
-        "> $20m",
-    ])
 
-    pilot_phase = st.radio("Where are you in your pilot journey?", [
-        "Proof of Concept (POC)",
-        "Closed Beta",
-        "Public MVP",
-    ])
-
-    if st.button("Generate Insights"):
-        st.header("Step 2: Insights")
-        
-        phases = ["Proof of Concept (POC)", "Closed Beta", "Public MVP"]
-        selected_phase = st.selectbox("Select a phase to focus on:", phases, index=phases.index(pilot_phase))
-
-        # Show phase-specific insights
-        st.markdown("### Phase-Specific KPIs and Insights")
-        if selected_phase == "Proof of Concept (POC)":
-            generate_poc_outputs(industry, product_audience, offering_type, budget)
-        elif selected_phase == "Closed Beta":
-            generate_beta_outputs(product_audience, geography, target_audience)
-        elif selected_phase == "Public MVP":
-            generate_mvp_outputs(business_goal, timeframe, geography)
-
-        # Integrate OpenAI Explanation
-        st.markdown("### Detailed Explanation from OpenAI")
-        selected_variables = f"""
+    if st.button("Generate KPI Suggestions"):
+        prompt_info = f"""
         Industry: {industry}
-        Product Audience: {product_audience}
-        Target Geography: {geography}
-        Target Audience: {target_audience}
-        Already Selling to Audience: {sell_to_audience}
-        Offering Type: {offering_type}
+        Audience: {product_audience}, {target_audience}
+        Geography: {geography}
+        Offering: {offering_type}
         Business Goal: {business_goal}
-        Benefit Statement: {benefit_statement}
         Timeframe: {timeframe}
-        Budget: {budget}
-        Pilot Phase: {selected_phase}
         """
+        suggestions = generate_kpis_from_openai(prompt_info)
+        st.session_state.kpi_suggestions = suggestions.split("\n") if suggestions else []
+    
+    if st.session_state.kpi_suggestions:
+        st.subheader("Suggested KPIs")
+        for line in st.session_state.kpi_suggestions:
+            st.write(line)
+        
+        user_input = st.text_input("Select KPI indices to adopt (e.g. '1,2' to pick the first two KPIs):")
 
-        if st.button("Explain These KPIs with OpenAI"):
-            explanation = explain_kpi(selected_variables)
-            st.subheader("KPI Explanation from OpenAI")
+        if st.button("Adopt Selected KPIs"):
+            chosen = []
+            try:
+                indices = [int(x.strip()) for x in user_input.split(",")]
+                for idx in indices:
+                    # Find the lines that start with "{idx}."
+                    # We'll collect all lines related to that KPI until we hit next KPI number or end.
+                    collecting = False
+                    kpi_block = []
+                    for line in st.session_state.kpi_suggestions:
+                        if line.strip().startswith(f"{idx}."):
+                            collecting = True
+                            kpi_block.append(line)
+                        elif collecting and (line.strip().startswith(tuple(str(i)+"." for i in range(1,20))) and not line.strip().startswith(f"{idx}.")):
+                            # Next KPI number found, stop collecting
+                            break
+                        elif collecting:
+                            kpi_block.append(line)
+                    if kpi_block:
+                        chosen.extend(kpi_block)
+            except:
+                st.error("Could not parse your selection. Please try something like '1,2'.")
+
+            if chosen:
+                st.session_state.selected_kpis = chosen
+                # Parse them into structured format
+                st.session_state.selected_kpis_struct = parse_selected_kpis(chosen)
+                st.success("Selected KPIs adopted!")
+    
+    if st.session_state.selected_kpis_struct:
+        st.subheader("Selected KPIs")
+        for k in st.session_state.selected_kpis_struct:
+            st.markdown(f"**KPI:** {k['name']}")
+            st.markdown(f"**Description:** {k['description']}")
+            st.markdown(f"**Guidance:** {k['guidance']}")
+            st.write("---")
+
+        if st.button("Explain Selected KPIs with OpenAI"):
+            # Reconstruct lines for the explanation
+            lines_for_explanation = []
+            for i, k in enumerate(st.session_state.selected_kpis_struct, start=1):
+                lines_for_explanation.append(f"{i}. KPI Name: {k['name']}\n   Description: {k['description']}\n   Guidance: {k['guidance']}")
+            explanation = explain_kpis("\n".join(lines_for_explanation))
+            st.subheader("Detailed KPI Explanation")
             st.write(explanation)
 
-        # Allow user to save the KPI configuration as CSV or JSON for future use
-        st.markdown("### Export KPI Configuration")
-        kpi_data = {
-            "Industry": industry,
-            "Product_Audience": product_audience,
-            "Geography": geography,
-            "Target_Audience": target_audience,
-            "Already_Selling": sell_to_audience,
-            "Offering_Type": offering_type,
-            "Business_Goal": business_goal,
-            "Benefit_Statement": benefit_statement,
-            "Timeframe": timeframe,
-            "Budget": budget,
-            "Pilot_Phase": selected_phase
-        }
+        st.subheader("Export Selected KPIs")
+        # Export CSV
+        csv_data = export_kpis_csv(st.session_state.selected_kpis_struct)
+        st.download_button("Download as CSV", data=csv_data, file_name="selected_kpis.csv", mime="text/csv")
 
-        # Export as CSV
-        csv_buffer = io.StringIO()
-        writer = csv.writer(csv_buffer)
-        writer.writerow(kpi_data.keys())
-        writer.writerow(kpi_data.values())
-        csv_data = csv_buffer.getvalue()
+        # Export JSON
+        json_data = export_kpis_json(st.session_state.selected_kpis_struct)
+        st.download_button("Download as JSON", data=json_data, file_name="selected_kpis.json", mime="application/json")
 
-        st.download_button(
-            label="Download KPIs as CSV",
-            data=csv_data,
-            file_name="kpi_configuration.csv",
-            mime="text/csv"
-        )
+        # Export TXT
+        text_data = export_kpis_text(st.session_state.selected_kpis_struct)
+        st.download_button("Download as TXT", data=text_data, file_name="selected_kpis.txt", mime="text/plain")
 
-        # Export as JSON
-        json_data = json.dumps(kpi_data, indent=4)
-        st.download_button(
-            label="Download KPIs as JSON",
-            data=json_data,
-            file_name="kpi_configuration.json",
-            mime="application/json"
-        )
+        # Export PDF
+        pdf_data = export_kpis_pdf(st.session_state.selected_kpis_struct)
+        st.download_button("Download as PDF", data=pdf_data, file_name="selected_kpis.pdf", mime="application/pdf")
 
-def generate_poc_outputs(industry, product_audience, offering_type, budget):
-    st.subheader("Proof of Concept (POC) Phase")
-    st.write("**Primary Objective:** Validate feasibility and core value proposition.")
-    st.write("**Top 3 KPIs:**")
-    st.write("1. Feasibility success rate (e.g., technical or operational success)")
-    st.write("2. Preliminary user interest or intent to adopt")
-    st.write("3. Cost-to-benefit ratio of prototype execution")
-    st.write("**Benchmarks:** Industry-specific adoption or feasibility success rates.")
-    st.write("**Risk Radar:** High R&D costs, lack of internal alignment, or unclear value propositions.")
-    st.write(f"**Sources:** Data sourced from industry reports and case studies in the {industry} sector.")
+# ------------------- KPI TRACKER TAB -------------------
+with tabs[1]:
+    st.header("KPI Tracker")
+    st.write("Input time-series data for your selected KPIs and visualize their trends.")
 
-def generate_beta_outputs(product_audience, geography, target_audience):
-    st.subheader("Closed Beta Phase")
-    st.write("**Primary Objective:** Refine the offer based on real user feedback.")
-    st.write("**Top 3 KPIs:**")
-    st.write("1. User satisfaction score (e.g., NPS or CSAT)")
-    st.write("2. Feature adoption rate (by core audience)")
-    st.write("3. Bug or issue resolution time")
-    st.write("**Benchmarks:** Industry averages for closed beta adoption and satisfaction rates.")
-    st.write(f"**Risk Radar:** Challenges in feedback collection or representative user selection for {product_audience} in {geography}.")
-    st.write(f"**Sources:** Feedback analysis from successful beta launches for similar audiences like {target_audience}.")
+    if not st.session_state.selected_kpis_struct:
+        st.info("No KPIs selected yet. Go to the 'KPI Builder' tab to generate and select KPIs first.")
+    else:
+        st.subheader("Manage Your KPI Data")
 
-def generate_mvp_outputs(business_goal, timeframe, geography):
-    st.subheader("Public MVP Phase")
-    st.write("**Primary Objective:** Achieve initial market adoption and validate scalability.")
-    st.write("**Top 3 KPIs:**")
-    st.write("1. Market adoption rate (e.g., % of target audience using the MVP)")
-    st.write("2. Revenue or profitability (aligned with primary business goal)")
-    st.write(f"3. Retention rate over initial time period ({timeframe})")
-    st.write("**Benchmarks:** Market penetration rates and revenue targets for public MVPs in similar geographies.")
-    st.write(f"**Risk Radar:** Scaling challenges, regulatory issues in {geography}, or failure to meet {business_goal} expectations.")
-    st.write("**Sources:** Market analysis and benchmark studies.")
+        # We have structured KPIs with names
+        kpi_names = [k["name"] for k in st.session_state.selected_kpis_struct]
+        
+        selected_kpi_name = st.selectbox("Select a KPI to input data for:", kpi_names)
+        data_input = st.text_input("Enter data points separated by commas (e.g., 10,20,30):")
 
-if __name__ == "__main__":
-    main()
+        if st.button("Add Data Points"):
+            if data_input:
+                try:
+                    values = [float(x.strip()) for x in data_input.split(",")]
+                    if selected_kpi_name not in st.session_state.kpi_data:
+                        st.session_state.kpi_data[selected_kpi_name] = values
+                    else:
+                        st.session_state.kpi_data[selected_kpi_name].extend(values)
+                    st.success("Data added successfully!")
+                except ValueError:
+                    st.error("Please enter only numeric values separated by commas.")
+
+        # Display charts for KPIs that have data
+        for kpi_name, data_points in st.session_state.kpi_data.items():
+            if data_points:
+                st.write(f"## {kpi_name} Trend")
+                fig = plot_kpi_chart(kpi_name, data_points)
+                st.pyplot(fig)
+
+                # Export chart as PNG
+                buf = io.BytesIO()
+                fig.savefig(buf, format="png")
+                buf.seek(0)
+                st.download_button(
+                    label=f"Download {kpi_name} Chart as PNG",
+                    data=buf,
+                    file_name=f"{kpi_name}_chart.png",
+                    mime="image/png"
+                )
