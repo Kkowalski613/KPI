@@ -288,14 +288,16 @@ with tabs[2]:
     if not st.session_state.get("selected_kpis_struct"):
         st.info("No KPIs selected yet. Go to the 'KPI Builder' tab to generate and select KPIs first.")
     else:
-        if not st.session_state.get("kpi_explanations"):
-            with st.spinner("Generating KPI explanations..."):
-                try:
+        try:
+            if not st.session_state.get("kpi_explanations"):
+                with st.spinner("Generating KPI explanations..."):
                     explanations = explain_kpis(st.session_state.selected_kpis_struct)
                     st.session_state.kpi_explanations = explanations
-                except Exception as e:
-                    st.error(f"Failed to generate explanations: {e}")
-        st.markdown(st.session_state.kpi_explanations)
+            st.markdown(st.session_state.kpi_explanations)
+        except NameError as e:
+            st.error(f"Function not defined: {e}")
+        except Exception as e:
+            st.error(f"Unexpected error: {e}")
 
 
 # Export KPIs Tab
