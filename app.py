@@ -23,65 +23,55 @@ st.session_state.kpi_explanations = st.session_state.get("kpi_explanations", {})
 # Helper Functions
 def generate_kpis_from_openai(prompt_content):
     """Generate KPIs using OpenAI API based on user-provided context."""
+    if not prompt_content:
+        st.error("Prompt content is empty. Please provide valid inputs.")
+        return []
+
     prompt = f"""
     You are an expert on KPIs. Based on the following business scenario, 
     suggest at least 5 relevant KPIs that align with the indicated pilot stage.
-    Format each KPI as a JSON object with the following structure:
-    {{
-        "name": "<KPI_Name>",
-        "description": "<What it measures and why it's important>",
-        "guidance": "<How to set targets and use it>"
-    }}
-    
-    Provide the KPIs as a JSON array.
 
-    Business Scenario:
+    **Instructions:**
+    - **Output Format:** JSON array.
+    - **Structure:** Each KPI should be a JSON object with the following keys:
+      - `"name"`: The name of the KPI.
+      - `"description"`: What it measures and why it's important.
+      - `"guidance"`: How to set targets and use it.
+    - **No Additional Text:** The response should contain only the JSON array without any additional explanations, text, or annotations.
+
+    **Business Scenario:**
     {prompt_content}
-
-    Consider the pilot phase and ensure KPIs are appropriate for the stage:
-    - Proof of Concept (POC): Focus on feasibility, early validation.
-    - Closed Beta: Focus on user feedback, product refinement.
-    - Public MVP: Focus on market adoption, scalability, revenue.
     """
+
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",  # Switch to GPT-4
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=800,
+            max_tokens=2000,  # Increase max_tokens for longer responses
             temperature=0.7
         )
+
+        # Debugging: Log the raw API response
+        st.write("Raw API Response:", response)
+
+        # Extract content from the response
         content = response.choices[0].message.content.strip()
-        # Attempt to parse JSON from the response
+        st.write("Processed Content:", content)  # Debug processed content
+
+        # Attempt to parse JSON from the content
         kpi_list = json.loads(content)
         return kpi_list
-    except Exception as e:
-        st.error(f"Error processing OpenAI API response: {e}")
+
+    except json.JSONDecodeError as e:
+        st.error(f"JSON decode error: {e}")
+        st.error("The response from OpenAI was not valid JSON. Please check the raw response above.")
         return []
-
-def explain_kpis(kpi_list):
-    """Provide detailed explanations for selected KPIs."""
-    prompt = f"""
-    You are an expert on KPIs. Provide a thorough explanation for each of the following KPIs:
-
-    {json.dumps(kpi_list, indent=4)}
-
-    For each KPI:
-    - Explain what it measures in-depth.
-    - How it can be practically applied.
-    - Common benchmarks or targets.
-    - Potential pitfalls or misinterpretations.
-    """
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1500,
-            temperature=0.7
-        )
-        return response.choices[0].message.content.strip()
+    except openai.error.OpenAIError as e:
+        st.error(f"OpenAI API error: {e}")
+        return []
     except Exception as e:
-        st.error(f"Error calling OpenAI API: {e}")
-        return ""
+        st.error(f"Unexpected error: {e}")
+        return []
 
 def plot_kpi_chart(kpi_name, data_points):
     """Generate a trend chart for a specific KPI."""
