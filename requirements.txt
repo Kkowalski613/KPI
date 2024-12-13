@@ -1,5 +1,5 @@
 openai==0.27.0
-streamlit==1.25.0
+streamlit
 matplotlib
 pandas
 fpdf
