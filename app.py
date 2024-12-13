@@ -1,12 +1,13 @@
 import streamlit as st
 import openai
 import os
+import io
+import csv
+import json
 
-# Set your OpenAI API key via environment variables or Streamlit Secrets
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def explain_kpi(prompt_content):
-    # Calls the OpenAI API to generate a detailed explanation of selected KPIs or configuration
     prompt = f"""
     You are an expert on KPIs. Consider the following KPI configuration and pilot phase details:
     {prompt_content}
@@ -24,13 +25,11 @@ def explain_kpi(prompt_content):
         return f"Error with OpenAI API: {e}"
 
 def main():
-    # Title and Description
     st.title("KPI Creation Kit")
-    st.write("Welcome to the KPI Creation Kit! This tool helps you define the key metrics and benchmarks for your pilot across different phases: POC, Closed Beta, and Public MVP.")
+    st.write("Welcome to the KPI Creation Kit! This tool helps you define key metrics for your pilot phases.")
 
-    # Intake Survey
+    # Step 1: Survey
     st.header("Step 1: Survey")
-
     industry = st.selectbox("What industry are you in?", [
         "Manufacturing",
         "Retail",
@@ -49,8 +48,8 @@ def main():
 
     product_audience = st.selectbox("What is your product audience?", ["B2B", "B2C", "B2B2C", "Internal", "Other"])
     geography = st.selectbox("What is your target launch geography?", ["Local", "Regional", "National", "Global", "Other"])
-    target_audience = st.text_input("In one phrase, describe your target audience (e.g., small business owners, millennial travelers)")
-    sell_to_audience = st.radio("Do you already sell other products/services to your target audience?", ["Yes", "No"])
+    target_audience = st.text_input("Describe your target audience")
+    sell_to_audience = st.radio("Do you already sell other products/services to this audience?", ["Yes", "No"])
     offering_type = st.selectbox("What are you offering?", [
         "Physical product",
         "Digital app",
@@ -60,7 +59,7 @@ def main():
         "Subscription-based product",
         "Other",
     ])
-    business_goal = st.selectbox("What is your primary business goal?", [
+    business_goal = st.selectbox("Primary business goal:", [
         "Revenue growth",
         "Improved profitability",
         "Market share expansion",
@@ -69,9 +68,9 @@ def main():
         "Sustainability or ESG-related goals",
         "Other",
     ])
-    benefit_statement = st.text_input("What problem is your offer trying to solve?")
-    timeframe = st.selectbox("When do you need to see success by?", ["1-3 months", "3-6 months", "6-12 months", "12+ months"])
-    budget = st.selectbox("What’s your approximate budget for launching and running the pilot?", [
+    benefit_statement = st.text_input("What problem does your offer solve?")
+    timeframe = st.selectbox("Timeframe for success:", ["1-3 months", "3-6 months", "6-12 months", "12+ months"])
+    budget = st.selectbox("Approximate budget:", [
         "Less than $1m",
         "$1m–$5m",
         "$5m–$10m",
@@ -85,14 +84,13 @@ def main():
         "Public MVP",
     ])
 
-    # Generate Outputs
     if st.button("Generate Insights"):
         st.header("Step 2: Insights")
         
         phases = ["Proof of Concept (POC)", "Closed Beta", "Public MVP"]
         selected_phase = st.selectbox("Select a phase to focus on:", phases, index=phases.index(pilot_phase))
 
-        # Display Phase-specific KPI guidance
+        # Show phase-specific insights
         st.markdown("### Phase-Specific KPIs and Insights")
         if selected_phase == "Proof of Concept (POC)":
             generate_poc_outputs(industry, product_audience, offering_type, budget)
@@ -102,10 +100,7 @@ def main():
             generate_mvp_outputs(business_goal, timeframe, geography)
 
         # Integrate OpenAI Explanation
-        st.markdown("### Get a Detailed Explanation from OpenAI")
-        st.write("You can use OpenAI's GPT to get a deeper explanation of your KPI configuration.")
-
-        # Consolidate the selected variables into a prompt
+        st.markdown("### Detailed Explanation from OpenAI")
         selected_variables = f"""
         Industry: {industry}
         Product Audience: {product_audience}
@@ -119,12 +114,50 @@ def main():
         Budget: {budget}
         Pilot Phase: {selected_phase}
         """
-        
+
         if st.button("Explain These KPIs with OpenAI"):
             explanation = explain_kpi(selected_variables)
             st.subheader("KPI Explanation from OpenAI")
             st.write(explanation)
 
+        # Allow user to save the KPI configuration as CSV or JSON for future use
+        st.markdown("### Export KPI Configuration")
+        kpi_data = {
+            "Industry": industry,
+            "Product_Audience": product_audience,
+            "Geography": geography,
+            "Target_Audience": target_audience,
+            "Already_Selling": sell_to_audience,
+            "Offering_Type": offering_type,
+            "Business_Goal": business_goal,
+            "Benefit_Statement": benefit_statement,
+            "Timeframe": timeframe,
+            "Budget": budget,
+            "Pilot_Phase": selected_phase
+        }
+
+        # Export as CSV
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(kpi_data.keys())
+        writer.writerow(kpi_data.values())
+        csv_data = csv_buffer.getvalue()
+
+        st.download_button(
+            label="Download KPIs as CSV",
+            data=csv_data,
+            file_name="kpi_configuration.csv",
+            mime="text/csv"
+        )
+
+        # Export as JSON
+        json_data = json.dumps(kpi_data, indent=4)
+        st.download_button(
+            label="Download KPIs as JSON",
+            data=json_data,
+            file_name="kpi_configuration.json",
+            mime="application/json"
+        )
 
 def generate_poc_outputs(industry, product_audience, offering_type, budget):
     st.subheader("Proof of Concept (POC) Phase")
@@ -137,7 +170,6 @@ def generate_poc_outputs(industry, product_audience, offering_type, budget):
     st.write("**Risk Radar:** High R&D costs, lack of internal alignment, or unclear value propositions.")
     st.write(f"**Sources:** Data sourced from industry reports and case studies in the {industry} sector.")
 
-
 def generate_beta_outputs(product_audience, geography, target_audience):
     st.subheader("Closed Beta Phase")
     st.write("**Primary Objective:** Refine the offer based on real user feedback.")
@@ -148,7 +180,6 @@ def generate_beta_outputs(product_audience, geography, target_audience):
     st.write("**Benchmarks:** Industry averages for closed beta adoption and satisfaction rates.")
     st.write(f"**Risk Radar:** Challenges in feedback collection or representative user selection for {product_audience} in {geography}.")
     st.write(f"**Sources:** Feedback analysis from successful beta launches for similar audiences like {target_audience}.")
-
 
 def generate_mvp_outputs(business_goal, timeframe, geography):
     st.subheader("Public MVP Phase")
@@ -161,7 +192,5 @@ def generate_mvp_outputs(business_goal, timeframe, geography):
     st.write(f"**Risk Radar:** Scaling challenges, regulatory issues in {geography}, or failure to meet {business_goal} expectations.")
     st.write("**Sources:** Market analysis and benchmark studies.")
 
-
 if __name__ == "__main__":
     main()
-
