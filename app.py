@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import json
 from fpdf import FPDF
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = st.secrets("OPENAI_API_KEY")
 
 # Initialize session state
 if "kpi_suggestions" not in st.session_state:
