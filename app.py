@@ -2,8 +2,9 @@ import streamlit as st
 import openai
 import os
 
-# Load OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Load the OpenAI API key from Streamlit Secrets
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
 
 # Function to call OpenAI API
 def explain_kpi(selected_variables):
