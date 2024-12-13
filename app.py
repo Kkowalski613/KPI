@@ -25,20 +25,27 @@ if "kpi_data" not in st.session_state:
 def generate_kpis_from_openai(prompt_content):
     prompt = f"""
     You are an expert on KPIs. Based on the following business scenario, 
-    suggest at least 5 relevant KPIs. 
-    For each KPI, follow this format exactly:
+    suggest at least 5 relevant KPIs that align with the indicated pilot stage. 
+    The KPIs should reflect the sophistication and focus expected for that stage.
+
+    Format each KPI as follows:
     <index>. KPI Name: <KPI_Name>
        Description: <What it measures and why it's important>
        Guidance: <How to set targets and use it>
 
     Scenario:
     {prompt_content}
+
+    Consider the pilot phase and ensure KPIs are appropriate for the stage:
+    - Proof of Concept (POC): Focus on feasibility, early validation.
+    - Closed Beta: Focus on user feedback, product refinement.
+    - Public MVP: Focus on market adoption, scalability, revenue.
     """
     try:
         response = openai.Completion.create(
             engine="text-davinci-003",
             prompt=prompt,
-            max_tokens=500,
+            max_tokens=800,
             temperature=0.7
         )
         return response.choices[0].text.strip()
@@ -54,12 +61,13 @@ def explain_kpis(kpi_list):
     - How it can be practically applied.
     - Common benchmarks or targets.
     - Potential pitfalls or misinterpretations.
+    Remember to consider the pilot stage mentioned previously and how that stage influences the KPI's usage.
     """
     try:
         response = openai.Completion.create(
             engine="text-davinci-003",
             prompt=prompt,
-            max_tokens=800,
+            max_tokens=1000,
             temperature=0.7
         )
         return response.choices[0].text.strip()
@@ -78,7 +86,7 @@ def plot_kpi_chart(kpi_name, data_points):
 def parse_selected_kpis(kpi_lines):
     """
     Parse the selected KPI lines into a structured format:
-    [{"name": <KPI_Name>, "description": <Desc>, "guidance": <Guidance>}, ...]
+    [{"name": <KPI_Name>, "description": <Desc>, "guidance": <Guidance>}]
     """
     kpis = []
     current_kpi = {}
@@ -98,8 +106,7 @@ def parse_selected_kpis(kpi_lines):
             if len(parts) > 1:
                 current_kpi["name"] = parts[1].strip()
         elif line_stripped[0].isdigit() and ". " in line_stripped:
-            # This might be a line that starts the KPI definition
-            # but KPI Name line will also appear, so we rely on that.
+            # Potential start line for a new KPI, already handled in KPI Name line
             continue
     # Add the last one if not empty
     if current_kpi:
@@ -107,7 +114,6 @@ def parse_selected_kpis(kpi_lines):
     return kpis
 
 def export_kpis_csv(kpi_list):
-    # kpi_list: [{"name":..., "description":..., "guidance":...}, ...]
     df = pd.DataFrame(kpi_list)
     return df.to_csv(index=False)
 
@@ -138,7 +144,7 @@ def export_kpis_pdf(kpi_list):
     return pdf_output
 
 st.title("KPI Creation and Tracking Kit")
-st.write("Generate meaningful KPIs, understand them with OpenAI, and track their progress over time. Also export your KPIs in multiple formats.")
+st.write("Generate meaningful KPIs tailored to your pilot phase, understand them with OpenAI, and track their progress over time. You can also export your KPIs in multiple formats.")
 
 tabs = st.tabs(["KPI Builder", "KPI Tracker"])
 
@@ -146,7 +152,8 @@ tabs = st.tabs(["KPI Builder", "KPI Tracker"])
 with tabs[0]:
     st.header("KPI Builder")
 
-    st.write("Provide context to generate meaningful KPIs:")
+    st.write("Provide context to generate meaningful KPIs, aligned with your pilot phase:")
+
     industry = st.selectbox("Industry:", [
         "Manufacturing", "Retail", "Technology", "Healthcare",
         "Transportation & Logistics", "Marketing & Advertising",
@@ -168,6 +175,12 @@ with tabs[0]:
     ])
     timeframe = st.selectbox("Timeframe for success:", ["1-3 months", "3-6 months", "6-12 months", "12+ months"])
 
+    pilot_phase = st.selectbox("Where are you in your pilot journey?", [
+        "Proof of Concept (POC)",
+        "Closed Beta",
+        "Public MVP",
+    ])
+
     if st.button("Generate KPI Suggestions"):
         prompt_info = f"""
         Industry: {industry}
@@ -176,6 +189,7 @@ with tabs[0]:
         Offering: {offering_type}
         Business Goal: {business_goal}
         Timeframe: {timeframe}
+        Pilot Phase: {pilot_phase}
         """
         suggestions = generate_kpis_from_openai(prompt_info)
         st.session_state.kpi_suggestions = suggestions.split("\n") if suggestions else []
@@ -192,8 +206,6 @@ with tabs[0]:
             try:
                 indices = [int(x.strip()) for x in user_input.split(",")]
                 for idx in indices:
-                    # Find the lines that start with "{idx}."
-                    # We'll collect all lines related to that KPI until we hit next KPI number or end.
                     collecting = False
                     kpi_block = []
                     for line in st.session_state.kpi_suggestions:
@@ -225,7 +237,6 @@ with tabs[0]:
             st.write("---")
 
         if st.button("Explain Selected KPIs with OpenAI"):
-            # Reconstruct lines for the explanation
             lines_for_explanation = []
             for i, k in enumerate(st.session_state.selected_kpis_struct, start=1):
                 lines_for_explanation.append(f"{i}. KPI Name: {k['name']}\n   Description: {k['description']}\n   Guidance: {k['guidance']}")
@@ -259,8 +270,6 @@ with tabs[1]:
         st.info("No KPIs selected yet. Go to the 'KPI Builder' tab to generate and select KPIs first.")
     else:
         st.subheader("Manage Your KPI Data")
-
-        # We have structured KPIs with names
         kpi_names = [k["name"] for k in st.session_state.selected_kpis_struct]
         
         selected_kpi_name = st.selectbox("Select a KPI to input data for:", kpi_names)
