@@ -76,10 +76,12 @@ def generate_kpis_from_openai(prompt_content):
 def generate_imaginary_data(kpi_name, scenario_strength):
     """Generate imaginary data for a KPI based on a scenario strength."""
     prompt = f"""
-You are an expert on competitive benchmarking in the industry selected. You know what good results look like for companies attempting pilots like this. Please generate benchmarks that we should compare our pilot to in order to determine whether the pilot is succeeding or not
+    You are an expert data scientist. Generate an artificial dataset for a KPI named "{kpi_name}".
+    The dataset should represent a {scenario_strength} performance scenario over 12 time periods.
+    Format the output as a JSON array of objects with the following structure:
     [
-        {{"time_periodcomp1": "Q1 2024", "10%": <numeric_value>}},
-        {{"time_periodcomp1": "Q2 2024", "15%": <numeric_value>}},
+        {{"time_period": "Time Period 1", "value": <numeric_value>}},
+        {{"time_period": "Time Period 2", "value": <numeric_value>}},
         ...
     ]
     Ensure the values align with a {scenario_strength} performance.
