@@ -14,6 +14,74 @@ st.session_state.kpi_data = st.session_state.get("kpi_data", {})
 st.session_state.kpi_explanations = st.session_state.get("kpi_explanations", {})
 st.session_state.phase_outputs = st.session_state.get("phase_outputs", {})
 
+# Export Functions
+def export_kpis_csv(kpi_list):
+    """Export KPIs as a CSV file."""
+    df = pd.DataFrame(kpi_list)
+    return df.to_csv(index=False).encode('utf-8')
+
+def export_kpis_json(kpi_list):
+    """Export KPIs as JSON file."""
+    try:
+        json_str = json.dumps(kpi_list, indent=4)
+        return json_str
+    except TypeError as e:
+        st.error(f"Error exporting KPIs to JSON: {e}")
+        return ""
+
+def export_kpis_text(kpi_list):
+    """Export KPIs as a plain text file."""
+    text_lines = []
+    for kpi in kpi_list:
+        text_lines.append(f"KPI: {kpi['name']}")
+        text_lines.append(f"Description: {kpi['description']}")
+        text_lines.append(f"Guidance: {kpi['guidance']}\n")
+    return "\n".join(text_lines).encode('utf-8')
+
+def export_kpis_pdf(kpi_list):
+    """Export KPIs as a PDF file."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(0, 10, "Selected KPIs", ln=True, align='C')
+    pdf.ln(10)
+    for kpi in kpi_list:
+        pdf.set_font("Arial", 'B', 12)
+        pdf.multi_cell(0, 10, f"KPI: {kpi['name']}")
+        pdf.set_font("Arial", '', 12)
+        pdf.multi_cell(0, 10, f"Description: {kpi['description']}")
+        pdf.multi_cell(0, 10, f"Guidance: {kpi['guidance']}\n")
+    pdf_output = pdf.output(dest='S').encode('latin-1')  # Return as bytes
+    return pdf_output
+
+# Plotting Function
+def plot_kpi_chart(kpi_name, data_points):
+    """Generate an interactive trend chart for a specific KPI using Plotly."""
+    fig = px.line(
+        data_points,
+        x='Time Period',
+        y='Value',
+        title=f"KPI: {kpi_name}",
+        markers=True
+    )
+    fig.update_layout(
+        xaxis_title="Time Period",
+        yaxis_title="Value",
+        hovermode="x unified"
+    )
+    return fig
+
+# Function to explain KPIs
+def explain_kpis(kpi_list):
+    """
+    Generates explanations for each KPI. This function can be customized or expanded.
+    For now, it returns a placeholder explanation.
+    """
+    explanations = {}
+    for kpi in kpi_list:
+        explanations[kpi['name']] = f"{kpi['description']} ({kpi['guidance']})"
+    return explanations
+
 # Define Pre-Defined KPIs per Phase
 def get_predefined_kpis(phase, survey_responses):
     """
@@ -80,7 +148,9 @@ def get_predefined_kpis(phase, survey_responses):
     
     # Customize KPIs based on Industry and Product Audience
     # Example: If B2B2C and Digital App, adjust descriptions or add specific KPIs
-    if phase == "Closed Beta" and product_audience == "B2B2C (Business-to-Business-to-Consumer)" and "digital app" in survey_responses.get("Offering Type", "").lower():
+    if (phase == "Closed Beta" and 
+        product_audience == "B2B2C (Business-to-Business-to-Consumer)" and 
+        "digital app" in survey_responses.get("Offering Type", "").lower()):
         predefined_kpis["Closed Beta"].append({
             "name": "Zillow Home Click Rate",
             "description": "Tracks the number of clicks on Zillow home listings within the app.",
@@ -167,73 +237,6 @@ def generate_focused_fake_data(industry, product_audience, kpi_name):
     }
     
     return pd.DataFrame(data)
-
-# Function to explain KPIs
-def explain_kpis(kpi_list):
-    """
-    Generates explanations for each KPI. This function can be customized or expanded.
-    For now, it returns a placeholder explanation.
-    """
-    explanations = {}
-    for kpi in kpi_list:
-        explanations[kpi['name']] = f"{kpi['description']} ({kpi['guidance']})"
-    return explanations
-
-# Export Functions
-def plot_kpi_chart(kpi_name, data_points):
-    """Generate an interactive trend chart for a specific KPI using Plotly."""
-    fig = px.line(
-        data_points,
-        x='Time Period',
-        y='Value',
-        title=f"KPI: {kpi_name}",
-        markers=True
-    )
-    fig.update_layout(
-        xaxis_title="Time Period",
-        yaxis_title="Value",
-        hovermode="x unified"
-    )
-    return fig
-
-def export_kpis_csv(kpi_list):
-    """Export KPIs as a CSV file."""
-    df = pd.DataFrame(kpi_list)
-    return df.to_csv(index=False).encode('utf-8')
-
-def export_kpis_json(kpi_list):
-    """Export KPIs as JSON file."""
-    try:
-        json_str = json.dumps(kpi_list, indent=4)
-        return json_str
-    except TypeError as e:
-        st.error(f"Error exporting KPIs to JSON: {e}")
-        return ""
-
-def export_kpis_text(kpi_list):
-    """Export KPIs as a plain text file."""
-    text_lines = []
-    for kpi in kpi_list:
-        text_lines.append(f"KPI: {kpi['name']}")
-        text_lines.append(f"Description: {kpi['description']}")
-        text_lines.append(f"Guidance: {kpi['guidance']}\n")
-    return "\n".join(text_lines).encode('utf-8')
-
-def export_kpis_pdf(kpi_list):
-    """Export KPIs as a PDF file."""
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.cell(0, 10, "Selected KPIs", ln=True, align='C')
-    pdf.ln(10)
-    for kpi in kpi_list:
-        pdf.set_font("Arial", 'B', 12)
-        pdf.multi_cell(0, 10, f"KPI: {kpi['name']}")
-        pdf.set_font("Arial", '', 12)
-        pdf.multi_cell(0, 10, f"Description: {kpi['description']}")
-        pdf.multi_cell(0, 10, f"Guidance: {kpi['guidance']}\n")
-    pdf_output = pdf.output(dest='S').encode('latin-1')  # Return as bytes
-    return pdf_output
 
 # Survey Page
 def survey_page():
@@ -414,13 +417,16 @@ def survey_page():
                     phase_outputs[phase]["Risk Radar"] = f"Identify potential risks or failure points for the {phase} phase and suggest mitigation strategies."
 
             st.session_state.phase_outputs = phase_outputs
-            st.session_state.kpi_suggestions = phase_outputs  # Store KPIs per phase
             # Store actual KPIs separately
             st.session_state.kpi_suggestions = {
                 phase: get_predefined_kpis(phase, st.session_state.survey_responses)
                 for phase in phases
             }
-            st.session_state.kpi_explanations = explain_kpis(kpis)  # Generate explanations for last phase
+            # Generate explanations for all KPIs
+            all_kpis = []
+            for kpi_list in st.session_state.kpi_suggestions.values():
+                all_kpis.extend(kpi_list)
+            st.session_state.kpi_explanations = explain_kpis(all_kpis)
             st.success("Phase outputs generated successfully! You can now access the KPI tools.")
 
 # Main App Logic
@@ -452,7 +458,7 @@ def main():
                 st.markdown(f"- {target}")
             st.markdown(f"**Similar Companies’ Results:** {phase_info['Similar Companies’ Results']}")
             st.markdown(f"**Additional Creative Outputs:** {phase_info['Additional Creative Outputs']}")
-            
+
             # Display Risk Radar for POC phase
             if phase == "POC":
                 st.markdown(f"**Risk Radar:** {phase_info['Risk Radar']}")
