@@ -14,7 +14,7 @@ st.session_state.kpi_data = st.session_state.get("kpi_data", {})
 st.session_state.kpi_explanations = st.session_state.get("kpi_explanations", {})
 st.session_state.phase_outputs = st.session_state.get("phase_outputs", {})
 
-# Export Functions
+# Export Functions (As previously defined)
 def export_kpis_csv(kpi_list):
     """Export KPIs as a CSV file."""
     df = pd.DataFrame(kpi_list)
@@ -54,7 +54,7 @@ def export_kpis_pdf(kpi_list):
     pdf_output = pdf.output(dest='S').encode('latin-1')  # Return as bytes
     return pdf_output
 
-# Plotting Function
+# Corrected Plotting Function
 def plot_kpi_chart(kpi_name, data_points):
     """Generate an interactive and enhanced trend chart for a specific KPI using Plotly."""
     # Ensure 'Time Period' is sorted
@@ -79,9 +79,12 @@ def plot_kpi_chart(kpi_name, data_points):
         x='Time Period',
         y='Moving Average',
         markers=False,
-        line=dict(dash='dash', color='orange'),
         labels={"Moving Average": "3-Month Moving Avg"}
     )
+    
+    # Modify the moving average trace's line properties
+    for trace in moving_avg_fig.data:
+        trace.update(line=dict(dash='dash', color='orange'))
     
     # Add the moving average trace to the primary figure
     fig.add_traces(moving_avg_fig.data)
@@ -322,7 +325,18 @@ def generate_focused_fake_data(industry, product_audience, kpi_name):
         "Value": values
     }
     
-    return pd.DataFrame(data)
+    df = pd.DataFrame(data)
+    
+    # Validate 'Time Period' format
+    expected_periods = [f"Month {i}" for i in range(1, 13)]
+    if not all(period in expected_periods for period in df['Time Period']):
+        st.error("Error: 'Time Period' entries must be in the format 'Month 1' to 'Month 12'.")
+        return pd.DataFrame()  # Return empty DataFrame on error
+    
+    # Handle missing values
+    df['Value'] = df['Value'].fillna(0)
+    
+    return df
 
 # Survey Page
 def survey_page():
@@ -607,7 +621,11 @@ def main():
 
                         # Upload Data
                         if data_option == "Upload Data":
-                            uploaded_file = st.file_uploader(f"Upload data for '{kpi['name']}'", type=["csv", "xlsx"], key=f"upload_{kpi['name']}")
+                            uploaded_file = st.file_uploader(
+                                f"Upload data for '{kpi['name']}'",
+                                type=["csv", "xlsx"],
+                                key=f"upload_{kpi['name']}"
+                            )
                             if uploaded_file:
                                 try:
                                     if uploaded_file.name.endswith(".csv"):
@@ -649,7 +667,10 @@ def main():
                                     if time_period and value is not None:
                                         new_data = pd.DataFrame({"Time Period": [time_period], "Value": [value]})
                                         if kpi['name'] in st.session_state.kpi_data:
-                                            st.session_state.kpi_data[kpi['name']] = pd.concat([st.session_state.kpi_data[kpi['name']], new_data], ignore_index=True)
+                                            st.session_state.kpi_data[kpi['name']] = pd.concat(
+                                                [st.session_state.kpi_data[kpi['name']], new_data],
+                                                ignore_index=True
+                                            )
                                         else:
                                             st.session_state.kpi_data[kpi['name']] = new_data
                                         st.success(f"Data point added for '{kpi['name']}'")
