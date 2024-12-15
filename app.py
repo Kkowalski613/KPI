@@ -1,128 +1,95 @@
 import streamlit as st
-import openai
-import os
-import io
 import pandas as pd
 import matplotlib.pyplot as plt
 import json
 from fpdf import FPDF
-
-# Load OpenAI API key from secrets
-if "OPENAI_API_KEY" not in st.secrets:
-    st.error("OpenAI API key not found in secrets. Please configure it before running the app.")
-    st.stop()
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+import numpy as np
 
 # Initialize session state variables
 if "survey_completed" not in st.session_state:
     st.session_state.survey_completed = False
-st.session_state.kpi_suggestions = st.session_state.get("kpi_suggestions", [])
+st.session_state.kpi_suggestions = st.session_state.get("kpi_suggestions", {})
 st.session_state.selected_kpis = st.session_state.get("selected_kpis", [])
-st.session_state.selected_kpis_struct = st.session_state.get("selected_kpis_struct", [])
 st.session_state.kpi_data = st.session_state.get("kpi_data", {})
 st.session_state.kpi_explanations = st.session_state.get("kpi_explanations", {})
 st.session_state.phase_outputs = st.session_state.get("phase_outputs", {})
 
-# Helper Functions
-
-def generate_kpis_from_openai(prompt_content):
-    """Generate KPIs using OpenAI API based on user-provided context."""
-    if not prompt_content:
-        st.error("Prompt content is empty. Please provide valid inputs.")
-        return []
-
-    prompt = f"""
-    You are an expert on KPIs. Based on the following business scenario, 
-    suggest at least 5 relevant KPIs that align with the indicated pilot stage.
-
-    **Instructions:**
-    - **Output Format:** JSON array.
-    - **Structure:** Each KPI should be a JSON object with the following keys:
-      - "name": The name of the KPI.
-      - "description": What it measures and why it's important.
-      - "guidance": How to set targets and use it.
-    - **No Additional Text:** The response should contain only the JSON array without any additional explanations, text, or annotations.
-
-    **Business Scenario:**
-    {prompt_content}
+# Define Pre-Defined KPIs per Phase
+def get_predefined_kpis(phase, survey_responses):
     """
+    Returns a list of KPIs based on the phase and survey responses.
+    Adjust KPIs as needed based on industry and product audience.
+    """
+    industry = survey_responses.get("Industry", "General")
+    product_audience = survey_responses.get("Product Audience", "General")
+    
+    # Example KPI templates; expand as needed
+    predefined_kpis = {
+        "POC": [
+            {
+                "name": "Concept Validation Rate",
+                "description": "Measures the percentage of concepts validated during the POC.",
+                "guidance": "Aim for at least 70% validation to proceed."
+            },
+            {
+                "name": "Stakeholder Engagement",
+                "description": "Tracks the level of stakeholder involvement and feedback.",
+                "guidance": "Maintain active engagement with at least 80% of stakeholders."
+            },
+            {
+                "name": "Technical Feasibility",
+                "description": "Assesses the technical viability of the proposed solution.",
+                "guidance": "Ensure that 90% of technical requirements are met."
+            }
+        ],
+        "Closed Beta": [
+            {
+                "name": "User Engagement",
+                "description": "Measures how actively users interact with the product.",
+                "guidance": "Target a monthly active user rate of 60%."
+            },
+            {
+                "name": "Feedback Quality",
+                "description": "Evaluates the usefulness and applicability of user feedback.",
+                "guidance": "Aim for actionable feedback from at least 75% of participants."
+            },
+            {
+                "name": "Bug Resolution Rate",
+                "description": "Tracks the rate at which reported bugs are fixed.",
+                "guidance": "Resolve 90% of critical bugs within two weeks."
+            }
+        ],
+        "Public MVP": [
+            {
+                "name": "Adoption Rate",
+                "description": "Measures the rate at which new users adopt the MVP.",
+                "guidance": "Target an adoption rate of 25% within the first quarter."
+            },
+            {
+                "name": "Customer Satisfaction",
+                "description": "Assesses overall user satisfaction with the MVP.",
+                "guidance": "Achieve a satisfaction score of 4 out of 5."
+            },
+            {
+                "name": "Retention Rate",
+                "description": "Tracks the percentage of users who continue using the MVP over time.",
+                "guidance": "Maintain a retention rate of at least 50% after six months."
+            }
+        ]
+    }
+    
+    # Customize KPIs based on Industry and Product Audience
+    # Example: If B2B2C and Digital App, adjust descriptions or add specific KPIs
+    if phase == "Closed Beta" and product_audience == "B2B2C (Business-to-Business-to-Consumer)" and "Digital app" in survey_responses.get("Offering Type", "").lower():
+        predefined_kpis["Closed Beta"].append({
+            "name": "Zillow Home Click Rate",
+            "description": "Tracks the number of clicks on Zillow home listings within the app.",
+            "guidance": "Aim for a click rate of at least 500 clicks per month."
+        })
+    
+    return predefined_kpis.get(phase, [])
 
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=800,
-            temperature=0.3
-        )
-
-        # Extract content from the response
-        content = response.choices[0].message.content.strip()
-
-        # Attempt to parse JSON from the content
-        kpi_list = json.loads(content)
-        return kpi_list
-
-    except json.JSONDecodeError as e:
-        st.error(f"JSON decode error: {e}")
-        st.error("The response from OpenAI was not valid JSON. Please check the raw response above.")
-        return []
-    except openai.error.OpenAIError as e:
-        st.error(f"OpenAI API error: {e}")
-        return []
-    except Exception as e:
-        st.error(f"Unexpected error: {e}")
-        return []
-
-def generate_phase_outputs(survey_responses):
-    """Generate detailed outputs for each pilot phase based on survey responses."""
-    phases = ["POC", "Closed Beta", "Public MVP"]
-    phase_outputs = {}
-
-    for phase in phases:
-        prompt = f"""
-        You are a business strategy expert. Based on the following survey responses, provide detailed outputs for the {phase} phase of a pilot project.
-
-        **Survey Responses:**
-        Industry: {survey_responses['Industry']}
-        Product Audience: {survey_responses['Product Audience']}
-        Geography: {survey_responses['Geography']}
-        Target Audience: {survey_responses['Target Audience']}
-        Existing Customer Base: {survey_responses['Existing Customer Base']}
-        Offering Type: {survey_responses['Offering Type']}
-        Business Goal: {survey_responses['Business Goal']}
-        Benefit Statement: {survey_responses['Benefit Statement']}
-        Timeframe: {survey_responses['Timeframe']}
-        Budget: {survey_responses['Budget']}
-
-        **For the {phase} phase, provide the following:**
-        1. **Primary Objective:** The main goal for this phase.
-        2. **Top 3 KPIs:** The three most important KPIs to determine success.
-        3. **Benchmarks/Targets:** Targets to hit for success.
-        4. **Similar Companies’ Results:** Examples of companies that have undertaken similar phases and their outcomes.
-        5. **Risk Radar:** (Only for POC phase) Potential risks or failure points and mitigation strategies.
-        6. **Additional Creative Outputs:** As specified per phase.
-
-        **Include citations for benchmarks and data sources.**
-        """
-
-        try:
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=800,
-                temperature=0.3
-            )
-
-            content = response.choices[0].message.content.strip()
-            phase_outputs[phase] = content
-
-        except openai.error.OpenAIError as e:
-            phase_outputs[phase] = f"OpenAI API error: {e}"
-        except Exception as e:
-            phase_outputs[phase] = f"Unexpected error: {e}"
-
-    return phase_outputs
-
+# Function to generate fake data based on Industry and Product Audience
 def generate_focused_fake_data(industry, product_audience, kpi_name):
     """
     Generate fake data based on Industry, Product Audience, and KPI.
@@ -130,95 +97,89 @@ def generate_focused_fake_data(industry, product_audience, kpi_name):
     """
     # Define the number of time periods (e.g., months)
     time_periods = [f"Month {i}" for i in range(1, 13)]
-
+    
     # Initialize empty list for values
     values = []
-
+    
     # Example logic based on KPI and industry/product audience
-    # This can be expanded with more sophisticated logic or mappings
-
+    # Expand this logic as needed
     if kpi_name.lower() == "user engagement":
-        if product_audience.startswith("B2B"):
-            # Example for B2B or B2B2C digital apps
+        if "B2B" in product_audience:
             base = 1000
             growth = 1.05
-            for i in range(12):
-                values.append(int(base * (growth ** i)))
-        elif product_audience.startswith("B2C"):
-            # Example for B2C digital apps
+            values = [int(base * (growth ** i)) for i in range(12)]
+        elif "B2C" in product_audience:
             base = 500
             growth = 1.1
-            for i in range(12):
-                values.append(int(base * (growth ** i)))
+            values = [int(base * (growth ** i)) for i in range(12)]
         else:
-            # Generic engagement metrics
             base = 800
             growth = 1.07
-            for i in range(12):
-                values.append(int(base * (growth ** i)))
-
+            values = [int(base * (growth ** i)) for i in range(12)]
+    
+    elif kpi_name.lower() == "zillow home click rate":
+        base = 200
+        growth = 1.08
+        values = [int(base * (growth ** i)) for i in range(12)]
+    
     elif kpi_name.lower() == "revenue growth":
         base = 10000
         growth = 1.08
-        for i in range(12):
-            values.append(int(base * (growth ** i)))
-
+        values = [int(base * (growth ** i)) for i in range(12)]
+    
     elif kpi_name.lower() == "customer acquisition":
         base = 200
         growth = 1.1
-        for i in range(12):
-            values.append(int(base * (growth ** i)))
-
+        values = [int(base * (growth ** i)) for i in range(12)]
+    
     elif kpi_name.lower() == "conversion rate":
         base = 2.5  # in percentage
         growth = 0.05
-        for i in range(12):
-            values.append(round(base + (growth * i), 2))
-
+        values = [round(base + (growth * i), 2) for i in range(12)]
+    
     elif kpi_name.lower() == "churn rate":
         base = 5.0  # in percentage
         growth = 0.1
-        for i in range(12):
-            values.append(round(base + (growth * i), 2))
-
+        values = [round(base + (growth * i), 2) for i in range(12)]
+    
+    elif kpi_name.lower() == "concept validation rate":
+        base = 70  # in percentage
+        growth = 0.5
+        values = [round(base + (growth * i), 2) for i in range(12)]
+    
+    elif kpi_name.lower() == "stakeholder engagement":
+        base = 80  # in percentage
+        growth = 0.3
+        values = [round(base + (growth * i), 2) for i in range(12)]
+    
+    elif kpi_name.lower() == "technical feasibility":
+        base = 90  # in percentage
+        growth = 0.2
+        values = [round(base + (growth * i), 2) for i in range(12)]
+    
     else:
         # Default fake data
-        for _ in range(12):
-            values.append(int(1000 + 500 * pd.np.random.rand()))
-
+        values = [int(1000 + 500 * np.random.rand()) for _ in range(12)]
+    
     data = {
         "Time Period": time_periods,
         "Value": values
     }
-
+    
     return pd.DataFrame(data)
 
-def explain_kpis(kpi_structs):
-    """Generate detailed explanations for each KPI using OpenAI."""
+# Function to explain KPIs (optional, can be pre-defined or omitted)
+def explain_kpis(kpi_list):
+    """
+    Generates explanations for each KPI. This function can be customized or expanded.
+    For now, it returns a placeholder explanation.
+    """
     explanations = {}
-    for kpi in kpi_structs:
-        prompt = f"""
-        Provide a detailed explanation for the following KPI:
-
-        KPI Name: {kpi['name']}
-        Description: {kpi['description']}
-        Guidance: {kpi['guidance']}
-        """
-        try:
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=300,
-                temperature=0.4
-            )
-            content = response.choices[0].message.content.strip()
-            explanations[kpi['name']] = content
-        except openai.error.OpenAIError as e:
-            explanations[kpi['name']] = f"Error generating explanation: {e}"
-        except Exception as e:
-            explanations[kpi['name']] = f"Unexpected error: {e}"
+    for kpi in kpi_list:
+        explanations[kpi['name']] = f"{kpi['description']} ({kpi['guidance']})"
     return explanations
 
+# Export Functions
 def plot_kpi_chart(kpi_name, data_points):
     """Generate a trend chart for a specific KPI."""
     fig, ax = plt.subplots()
@@ -232,11 +193,11 @@ def plot_kpi_chart(kpi_name, data_points):
 def export_kpis_csv(kpi_list):
     """Export KPIs as a CSV file."""
     df = pd.DataFrame(kpi_list)
-    return df.to_csv(index=False)
+    return df.to_csv(index=False).encode('utf-8')
 
 def export_kpis_json(kpi_list):
     """Export KPIs as JSON file."""
-    return json.dumps(kpi_list, indent=4)
+    return json.dumps(kpi_list, indent=4).encode('utf-8')
 
 def export_kpis_text(kpi_list):
     """Export KPIs as a plain text file."""
@@ -245,7 +206,7 @@ def export_kpis_text(kpi_list):
         text_lines.append(f"KPI: {kpi['name']}")
         text_lines.append(f"Description: {kpi['description']}")
         text_lines.append(f"Guidance: {kpi['guidance']}\n")
-    return "\n".join(text_lines)
+    return "\n".join(text_lines).encode('utf-8')
 
 def export_kpis_pdf(kpi_list):
     """Export KPIs as a PDF file."""
@@ -437,7 +398,7 @@ def main():
         survey_page()
     else:
         st.title("KPI Creation and Tracking Kit")
-        st.write("Generate meaningful KPIs tailored to your pilot phase, understand them with OpenAI, and track their progress over time.")
+        st.write("Generate meaningful KPIs tailored to your pilot phase, understand them with detailed insights, and track their progress over time.")
 
         # Phase Selection
         st.markdown("### **Select a phase to focus on:**")
@@ -493,14 +454,16 @@ def main():
             if st.session_state.kpi_suggestions:
                 st.subheader("Suggested KPIs")
                 # Allow users to select KPIs
-                kpi_options = [f"{kpi['name']}: {kpi['description']}" for kpi in st.session_state.kpi_suggestions]
-                selected = st.multiselect("Select KPIs you want to track:", options=kpi_options)
+                kpi_options = [f"{kpi['name']}: {kpi['description']}" for kpi in st.session_state.kpi_suggestions.get(phase, [])]
+                
+                # Assign a unique key to the multiselect to prevent duplication
+                selected = st.multiselect("Select KPIs you want to track:", options=kpi_options, key=f"kpi_multiselect_{phase}")
 
                 # Map selected options back to KPI structures
                 selected_struct = []
                 for sel in selected:
                     kpi_name = sel.split(":")[0]
-                    for kpi in st.session_state.kpi_suggestions:
+                    for kpi in st.session_state.kpi_suggestions.get(phase, []):
                         if kpi['name'] == kpi_name:
                             selected_struct.append(kpi)
                             break
@@ -519,53 +482,13 @@ def main():
             # KPI Builder Tab
             with tabs[0]:
                 st.header("KPI Builder")
-                with st.form("kpi_builder_form"):
-                    # Use survey responses to pre-fill or influence KPI generation
-                    survey = st.session_state.get("survey_responses", {})
-                    prompt_info = "\n".join([f"{key}: {value}" for key, value in survey.items()])
-
-                    st.write("Based on your survey responses, generate KPI suggestions.")
-
-                    # Submit Button
-                    submitted = st.form_submit_button("Generate KPI Suggestions")
-                    if submitted:
-                        with st.spinner("Generating KPIs..."):
-                            suggestions = generate_kpis_from_openai(prompt_info)
-                        if suggestions:
-                            st.session_state.kpi_suggestions = suggestions
-                            st.success("KPIs generated successfully!")
-                        else:
-                            st.error("Failed to generate KPIs. Please try again.")
-
-                # Display Suggested KPIs
-                if st.session_state.kpi_suggestions:
-                    st.subheader("Suggested KPIs")
-                    # Allow users to select KPIs
-                    kpi_options = [f"{kpi['name']}: {kpi['description']}" for kpi in st.session_state.kpi_suggestions]
-                    selected = st.multiselect("Select KPIs you want to track:", options=kpi_options)
-
-                    # Map selected options back to KPI structures
-                    selected_struct = []
-                    for sel in selected:
-                        kpi_name = sel.split(":")[0]
-                        for kpi in st.session_state.kpi_suggestions:
-                            if kpi['name'] == kpi_name:
-                                selected_struct.append(kpi)
-                                break
-
-                    # Update session state with selected KPIs
-                    st.session_state.selected_kpis_struct = selected_struct
-
-                    # Save selected KPIs
-                    if selected:
-                        st.session_state.selected_kpis = selected
-                        st.success("Selected KPIs have been saved to the tracker.")
+                st.write("Based on your survey responses, the KPIs have been pre-defined for consistency. You can adjust or add new KPIs as needed.")
 
             # KPI Tracker Tab
             with tabs[1]:
                 st.header("KPI Tracker")
                 if not st.session_state.selected_kpis_struct:
-                    st.info("No KPIs selected yet. Go to the 'KPI Builder' tab to generate and select KPIs first.")
+                    st.info("No KPIs selected yet. Go to the 'Suggested KPIs' section above to select KPIs to track.")
                 else:
                     for idx, kpi in enumerate(st.session_state.selected_kpis_struct, 1):
                         st.markdown(f"### {idx}. {kpi['name']}")
@@ -601,12 +524,13 @@ def main():
 
                         # Generate Imaginary Data
                         elif data_option == "Generate Imaginary Data":
+                            # Retrieve survey responses
                             if "survey_responses" in st.session_state:
-                                industry = st.session_state.survey_responses.get("Industry", "Unknown Industry")
-                                product_audience = st.session_state.survey_responses.get("Product Audience", "Unknown Audience")
+                                industry = st.session_state.survey_responses.get("Industry", "General")
+                                product_audience = st.session_state.survey_responses.get("Product Audience", "General")
                             else:
-                                industry = "Unknown Industry"
-                                product_audience = "Unknown Audience"
+                                industry = "General"
+                                product_audience = "General"
 
                             if st.button(f"Generate Data for '{kpi['name']}'", key=f"generate_{kpi['name']}"):
                                 with st.spinner("Generating data..."):
@@ -638,12 +562,7 @@ def main():
                             st.write(f"### Data for '{kpi['name']}'")
                             st.dataframe(df)
                             # Plotting
-                            fig, ax = plt.subplots()
-                            ax.plot(df['Time Period'], df['Value'], marker='o')
-                            ax.set_title(f"Trend for '{kpi['name']}'")
-                            ax.set_xlabel("Time Period")
-                            ax.set_ylabel("Value")
-                            plt.xticks(rotation=45)
+                            fig = plot_kpi_chart(kpi['name'], df)
                             st.pyplot(fig)
 
             # KPI Explanations Tab
@@ -651,27 +570,23 @@ def main():
                 st.header("KPI Explanations")
 
                 if not st.session_state.get("selected_kpis_struct"):
-                    st.info("No KPIs selected yet. Go to the 'KPI Builder' tab to generate and select KPIs first.")
+                    st.info("No KPIs selected yet. Go to the 'Suggested KPIs' section above to select KPIs to track.")
                 else:
-                    try:
-                        if not st.session_state.get("kpi_explanations"):
-                            with st.spinner("Generating KPI explanations..."):
-                                explanations = explain_kpis(st.session_state.selected_kpis_struct)
-                                st.session_state.kpi_explanations = explanations
-                        # Display explanations
-                        for kpi_name, explanation in st.session_state.kpi_explanations.items():
-                            st.markdown(f"### {kpi_name}")
-                            st.write(explanation)
-                    except NameError as e:
-                        st.error(f"Function not defined: {e}")
-                    except Exception as e:
-                        st.error(f"Unexpected error: {e}")
+                    # Generate explanations if not already done
+                    if not st.session_state.get("kpi_explanations"):
+                        explanations = explain_kpis(st.session_state.selected_kpis_struct)
+                        st.session_state.kpi_explanations = explanations
+
+                    # Display explanations
+                    for kpi_name, explanation in st.session_state.kpi_explanations.items():
+                        st.markdown(f"### {kpi_name}")
+                        st.write(explanation)
 
             # Export KPIs Tab
             with tabs[3]:
                 st.header("Export KPIs")
                 if not st.session_state.selected_kpis_struct:
-                    st.info("No KPIs selected yet. Go to the 'KPI Builder' tab to generate and select KPIs first.")
+                    st.info("No KPIs selected yet. Go to the 'Suggested KPIs' section above to select KPIs to track.")
                 else:
                     st.subheader("Download KPIs")
                     kpi_list = st.session_state.selected_kpis_struct
