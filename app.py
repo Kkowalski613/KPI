@@ -56,19 +56,59 @@ def export_kpis_pdf(kpi_list):
 
 # Plotting Function
 def plot_kpi_chart(kpi_name, data_points):
-    """Generate an interactive trend chart for a specific KPI using Plotly."""
+    """Generate an interactive and enhanced trend chart for a specific KPI using Plotly."""
+    # Calculate a 3-month moving average
+    data_points['Moving Average'] = data_points['Value'].rolling(window=3).mean()
+    
+    # Create the line chart with markers
     fig = px.line(
         data_points,
         x='Time Period',
         y='Value',
         title=f"KPI: {kpi_name}",
-        markers=True
+        markers=True,
+        labels={"Value": kpi_name}
     )
+    
+    # Add moving average line
+    fig.add_traces(px.line(
+        data_points,
+        x='Time Period',
+        y='Moving Average',
+        markers=False,
+        line=dict(dash='dash')
+    ).data)
+    
+    # Add annotations (example: mid-year review)
+    if 'Month 6' in data_points['Time Period'].values:
+        month6_value = data_points[data_points['Time Period'] == 'Month 6']['Value'].values[0]
+        fig.add_annotation(
+            x='Month 6',
+            y=month6_value,
+            text="Mid-year Review",
+            showarrow=True,
+            arrowhead=1
+        )
+    
+    # Update layout for better aesthetics
     fig.update_layout(
         xaxis_title="Time Period",
-        yaxis_title="Value",
-        hovermode="x unified"
+        yaxis_title=kpi_name,
+        hovermode="x unified",
+        template="plotly_dark",
+        legend=dict(
+            x=0.01,
+            y=0.99,
+            bgcolor='rgba(0,0,0,0)',
+            bordercolor='rgba(0,0,0,0)'
+        )
     )
+    
+    # Update hover template for clarity
+    fig.update_traces(
+        hovertemplate="<b>%{x}</b><br>%{y}"
+    )
+    
     return fig
 
 # Function to explain KPIs
@@ -177,58 +217,58 @@ def generate_focused_fake_data(industry, product_audience, kpi_name):
         if "B2B" in product_audience:
             base = 1000
             growth = 1.05
-            values = [int(base * (growth ** i)) for i in range(12)]
+            values = [int(base * (growth ** i) + np.random.normal(0, 50)) for i in range(12)]
         elif "B2C" in product_audience:
             base = 500
             growth = 1.1
-            values = [int(base * (growth ** i)) for i in range(12)]
+            values = [int(base * (growth ** i) + np.random.normal(0, 30)) for i in range(12)]
         else:
             base = 800
             growth = 1.07
-            values = [int(base * (growth ** i)) for i in range(12)]
+            values = [int(base * (growth ** i) + np.random.normal(0, 40)) for i in range(12)]
     
     elif kpi_name.lower() == "zillow home click rate":
         base = 200
         growth = 1.08
-        values = [int(base * (growth ** i)) for i in range(12)]
+        values = [int(base * (growth ** i) + np.random.normal(0, 20)) for i in range(12)]
     
     elif kpi_name.lower() == "revenue growth":
         base = 10000
         growth = 1.08
-        values = [int(base * (growth ** i)) for i in range(12)]
+        values = [int(base * (growth ** i) + np.random.normal(0, 1000)) for i in range(12)]
     
     elif kpi_name.lower() == "customer acquisition":
         base = 200
         growth = 1.1
-        values = [int(base * (growth ** i)) for i in range(12)]
+        values = [int(base * (growth ** i) + np.random.normal(0, 15)) for i in range(12)]
     
     elif kpi_name.lower() == "conversion rate":
         base = 2.5  # in percentage
         growth = 0.05
-        values = [round(base + (growth * i), 2) for i in range(12)]
+        values = [round(base + (growth * i) + np.random.normal(0, 0.2), 2) for i in range(12)]
     
     elif kpi_name.lower() == "churn rate":
         base = 5.0  # in percentage
         growth = 0.1
-        values = [round(base + (growth * i), 2) for i in range(12)]
+        values = [round(base + (growth * i) + np.random.normal(0, 0.3), 2) for i in range(12)]
     
     elif kpi_name.lower() == "concept validation rate":
         base = 70  # in percentage
         growth = 0.5
-        values = [round(base + (growth * i), 2) for i in range(12)]
+        values = [round(base + (growth * i) + np.random.normal(0, 1), 2) for i in range(12)]
     
     elif kpi_name.lower() == "stakeholder engagement":
         base = 80  # in percentage
         growth = 0.3
-        values = [round(base + (growth * i), 2) for i in range(12)]
+        values = [round(base + (growth * i) + np.random.normal(0, 0.5), 2) for i in range(12)]
     
     elif kpi_name.lower() == "technical feasibility":
         base = 90  # in percentage
         growth = 0.2
-        values = [round(base + (growth * i), 2) for i in range(12)]
+        values = [round(base + (growth * i) + np.random.normal(0, 0.2), 2) for i in range(12)]
     
     else:
-        # Default fake data
+        # Default fake data with some randomness
         values = [int(1000 + 500 * np.random.rand()) for _ in range(12)]
     
     data = {
@@ -458,7 +498,7 @@ def main():
                 st.markdown(f"- {target}")
             st.markdown(f"**Similar Companies’ Results:** {phase_info['Similar Companies’ Results']}")
             st.markdown(f"**Additional Creative Outputs:** {phase_info['Additional Creative Outputs']}")
-
+            
             # Display Risk Radar for POC phase
             if phase == "POC":
                 st.markdown(f"**Risk Radar:** {phase_info['Risk Radar']}")
