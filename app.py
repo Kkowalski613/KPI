@@ -84,7 +84,8 @@ def export_kpis_pdf(kpi_list):
     pdf = FPDF()
     pdf.add_page()
     
-    # Optional: Add a Unicode font
+    # Optional: Add a Unicode font (requires the TTF file in your project directory)
+    # Uncomment the lines below if you wish to use a Unicode font
     # pdf.add_font("DejaVu", "", "DejaVuSans.ttf", uni=True)
     # pdf.set_font("DejaVu", size=12)
     
@@ -105,8 +106,12 @@ def export_kpis_pdf(kpi_list):
         # KPI Guidance
         pdf.multi_cell(0, 10, f"Guidance: {kpi['guidance']}\n")
     
-    # Generate PDF as bytes
-    pdf_output = pdf.output(dest='S').encode('latin-1', 'replace')  # Handle non-latin1 chars
+    try:
+        # Generate PDF as bytes
+        pdf_output = pdf.output(dest='S').encode('latin-1', 'replace')  # Handle non-latin1 chars
+    except UnicodeEncodeError as e:
+        st.error(f"Error encoding PDF: {e}")
+        return b""
     
     return pdf_output
 
@@ -606,7 +611,7 @@ def main():
                 st.markdown(f"- {target}")
             st.markdown(f"**Similar Companies’ Results:** {phase_info['Similar Companies’ Results']}")
             st.markdown(f"**Additional Creative Outputs:** {phase_info['Additional Creative Outputs']}")
-
+            
             # Display Risk Radar for POC phase
             if phase == "POC":
                 st.markdown(f"**Risk Radar:** {phase_info['Risk Radar']}")
@@ -765,30 +770,34 @@ def main():
                     text = export_kpis_text(kpi_list)
                     pdf = export_kpis_pdf(kpi_list)
 
-                    st.download_button(
-                        label="Download KPIs as CSV",
-                        data=csv,
-                        file_name="kpis.csv",
-                        mime="text/csv"
-                    )
-                    st.download_button(
-                        label="Download KPIs as JSON",
-                        data=json_data,
-                        file_name="kpis.json",
-                        mime="application/json"
-                    )
-                    st.download_button(
-                        label="Download KPIs as Text",
-                        data=text,
-                        file_name="kpis.txt",
-                        mime="text/plain"
-                    )
-                    st.download_button(
-                        label="Download KPIs as PDF",
-                        data=pdf,
-                        file_name="kpis.pdf",
-                        mime="application/pdf"
-                    )
+                    if csv:
+                        st.download_button(
+                            label="Download KPIs as CSV",
+                            data=csv,
+                            file_name="kpis.csv",
+                            mime="text/csv"
+                        )
+                    if json_data:
+                        st.download_button(
+                            label="Download KPIs as JSON",
+                            data=json_data,
+                            file_name="kpis.json",
+                            mime="application/json"
+                        )
+                    if text:
+                        st.download_button(
+                            label="Download KPIs as Text",
+                            data=text,
+                            file_name="kpis.txt",
+                            mime="text/plain"
+                        )
+                    if pdf:
+                        st.download_button(
+                            label="Download KPIs as PDF",
+                            data=pdf,
+                            file_name="kpis.pdf",
+                            mime="application/pdf"
+                        )
 
 if __name__ == "__main__":
     main()
