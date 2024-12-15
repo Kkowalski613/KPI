@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import json
 from fpdf import FPDF
 import numpy as np
 
@@ -80,7 +79,7 @@ def get_predefined_kpis(phase, survey_responses):
     
     # Customize KPIs based on Industry and Product Audience
     # Example: If B2B2C and Digital App, adjust descriptions or add specific KPIs
-    if phase == "Closed Beta" and product_audience == "B2B2C (Business-to-Business-to-Consumer)" and "Digital app" in survey_responses.get("Offering Type", "").lower():
+    if phase == "Closed Beta" and product_audience == "B2B2C (Business-to-Business-to-Consumer)" and "digital app" in survey_responses.get("Offering Type", "").lower():
         predefined_kpis["Closed Beta"].append({
             "name": "Zillow Home Click Rate",
             "description": "Tracks the number of clicks on Zillow home listings within the app.",
@@ -168,7 +167,7 @@ def generate_focused_fake_data(industry, product_audience, kpi_name):
     
     return pd.DataFrame(data)
 
-# Function to explain KPIs (optional, can be pre-defined or omitted)
+# Function to explain KPIs
 def explain_kpis(kpi_list):
     """
     Generates explanations for each KPI. This function can be customized or expanded.
@@ -249,10 +248,10 @@ def survey_page():
             "Energy & Utilities",
             "Hospitality & Travel",
             "Other (open-ended)",
-        ])
+        ], key="industry_select")
 
         if industry == "Other (open-ended)":
-            industry = st.text_input("Please specify your industry")
+            industry = st.text_input("Please specify your industry", key="industry_other")
 
         st.markdown("---")
 
@@ -264,10 +263,10 @@ def survey_page():
             "B2B2C (Business-to-Business-to-Consumer)",
             "Internal (Employee-focused initiatives)",
             "Other (open-ended)",
-        ])
+        ], key="product_audience_select")
 
         if product_audience == "Other (open-ended)":
-            product_audience = st.text_input("Please specify your product audience")
+            product_audience = st.text_input("Please specify your product audience", key="product_audience_other")
 
         st.markdown("---")
 
@@ -279,22 +278,22 @@ def survey_page():
             "National (Entire country)",
             "Global (Multiple countries)",
             "Other (open-ended)",
-        ])
+        ], key="geography_select")
 
         if geography == "Other (open-ended)":
-            geography = st.text_input("Please specify your target launch geography")
+            geography = st.text_input("Please specify your target launch geography", key="geography_other")
 
         st.markdown("---")
 
         # Question 4
         st.markdown("### **4. In one phrase, describe your target audience.**")
-        target_audience = st.text_input("Provide a phrase (e.g., 'Small business owners', 'Millennial travelers')")
+        target_audience = st.text_input("Provide a phrase (e.g., 'Small business owners', 'Millennial travelers')", key="target_audience")
 
         st.markdown("---")
 
         # Question 5
         st.markdown("### **5. Do you already sell other products or services to your target audience?**")
-        sell_to_audience = st.radio("", ["Yes", "No"])
+        sell_to_audience = st.radio("", ["Yes", "No"], key="sell_to_audience_radio")
 
         st.markdown("---")
 
@@ -308,10 +307,10 @@ def survey_page():
             "Hybrid physical/digital product",
             "Subscription-based product",
             "Other (open-ended)",
-        ])
+        ], key="offering_type_select")
 
         if offering_type == "Other (open-ended)":
-            offering_type = st.text_input("Please specify what you are piloting")
+            offering_type = st.text_input("Please specify what you are piloting", key="offering_type_other")
 
         st.markdown("---")
 
@@ -325,16 +324,16 @@ def survey_page():
             "Brand loyalty/engagement",
             "Sustainability or ESG-related goals",
             "Other (open-ended)",
-        ])
+        ], key="business_goal_select")
 
         if business_goal == "Other (open-ended)":
-            business_goal = st.text_input("Please specify your primary business goal")
+            business_goal = st.text_input("Please specify your primary business goal", key="business_goal_other")
 
         st.markdown("---")
 
         # Question 8
         st.markdown("### **8. In one sentence, explain what customer problem your pilot is trying to solve.**")
-        benefit_statement = st.text_area("Provide a sentence (e.g., 'Help small business owners manage their finances more effectively.')")
+        benefit_statement = st.text_area("Provide a sentence (e.g., 'Help small business owners manage their finances more effectively.')", key="benefit_statement")
 
         st.markdown("---")
 
@@ -346,7 +345,7 @@ def survey_page():
             "6–12 months",
             "12+ months",
             "I don't know yet",
-        ])
+        ], key="timeframe_select")
 
         st.markdown("---")
 
@@ -359,10 +358,10 @@ def survey_page():
             "$10m–$20m",
             "Greater than $20m",
             "Other (open-ended)",
-        ])
+        ], key="budget_select")
 
         if budget == "Other (open-ended)":
-            budget = st.text_input("Please specify your approximate budget")
+            budget = st.text_input("Please specify your approximate budget", key="budget_other")
 
         st.markdown("---")
 
@@ -385,9 +384,27 @@ def survey_page():
             st.session_state.survey_completed = True
             st.success("Survey submitted successfully! Generating phase outputs...")
 
-            with st.spinner("Generating phase outputs..."):
-                phase_outputs = generate_phase_outputs(st.session_state.survey_responses)
-                st.session_state.phase_outputs = phase_outputs
+            # Generate phase outputs based on pre-defined templates
+            phase_outputs = {}
+            phases = ["POC", "Closed Beta", "Public MVP"]
+            for phase in phases:
+                kpis = get_predefined_kpis(phase, st.session_state.survey_responses)
+                phase_outputs[phase] = {
+                    "Primary Objective": f"Primary objective for the {phase} phase.",
+                    "Top 3 KPIs": [kpi['name'] for kpi in kpis[:3]],
+                    "Benchmarks/Targets": [kpi['guidance'] for kpi in kpis[:3]],
+                    "Similar Companies’ Results": f"Examples of companies that have undertaken similar {phase} phases and their outcomes.",
+                    "Additional Creative Outputs": f"Additional creative outputs for the {phase} phase."
+                }
+
+                # Add Risk Radar for POC phase
+                if phase == "POC":
+                    phase_outputs[phase]["Risk Radar"] = f"Potential risks or failure points for the {phase} phase and mitigation strategies."
+
+            st.session_state.phase_outputs = phase_outputs
+            st.session_state.kpi_suggestions = phase_outputs
+            st.session_state.kpi_explanations = explain_kpis(kpis)
+
             st.success("Phase outputs generated successfully! You can now access the KPI tools.")
 
 # Main App Logic
@@ -402,51 +419,27 @@ def main():
 
         # Phase Selection
         st.markdown("### **Select a phase to focus on:**")
-        phase = st.selectbox("", ["POC", "Closed Beta", "Public MVP"], index=0)
+        phase = st.selectbox("", ["POC", "Closed Beta", "Public MVP"], index=0, key="phase_select")
 
         st.markdown("---")
 
         # Display Phase Outputs
         if phase in st.session_state.phase_outputs:
             st.markdown(f"## **{phase} Phase**")
-            st.markdown(st.session_state.phase_outputs[phase])
+            phase_info = st.session_state.phase_outputs[phase]
+            st.markdown(f"**Primary Objective:** {phase_info['Primary Objective']}")
+            st.markdown("**Top 3 KPIs:**")
+            for kpi in phase_info["Top 3 KPIs"]:
+                st.markdown(f"- {kpi}")
+            st.markdown("**Benchmarks/Targets:**")
+            for target in phase_info["Benchmarks/Targets"]:
+                st.markdown(f"- {target}")
+            st.markdown(f"**Similar Companies’ Results:** {phase_info['Similar Companies’ Results']}")
+            st.markdown(f"**Additional Creative Outputs:** {phase_info['Additional Creative Outputs']}")
 
-            # Additional Creative Outputs
+            # Display Risk Radar for POC phase
             if phase == "POC":
-                st.markdown("### **Creative Outputs for POC Phase**")
-                st.markdown("""
-                **Risk Radar:** Highlight potential risks or failure points for the POC stage and mitigation strategies tailored to your inputs.
-
-                **Time-to-Impact Analysis:** Suggest an ideal timeline for reaching key milestones, with breakdowns of expected progress (e.g., weeks 1–4: concept validation, weeks 5–8: user testing).
-
-                **Cost vs. ROI Model:** Provide a basic estimation of the cost-efficiency of pursuing the POC, factoring in industry norms and your inputs (e.g., budget, timeframe).
-
-                **Hypothesis Tracker:** Generate a template for tracking and validating key assumptions about the offer or audience during the POC.
-                """)
-
-            elif phase == "Closed Beta":
-                st.markdown("### **Creative Outputs for Closed Beta Phase**")
-                st.markdown("""
-                **Feedback Collection Blueprint:** Offer customizable templates or survey frameworks for collecting user feedback, tailored to your product audience (e.g., B2B, B2C).
-
-                **Iterative Improvement Suggestions:** Based on historical data, propose actionable adjustments businesses can make based on common beta-stage findings in similar scenarios.
-
-                **Competitive Gap Analysis:** Identify how competitors’ betas succeeded or failed, emphasizing lessons learned.
-
-                **Scalability Checklist:** Generate a readiness assessment for moving from beta to public MVP, with a focus on scalability and operational readiness.
-                """)
-
-            elif phase == "Public MVP":
-                st.markdown("### **Creative Outputs for Public MVP Phase**")
-                st.markdown("""
-                **Launch Readiness Dashboard:** Provide a customizable checklist to ensure the MVP is ready for public launch, including logistics, marketing, and customer support readiness.
-
-                **Adoption Pathways:** Suggest strategies to maximize early adoption based on benchmarks and audience insights (e.g., discounts, referral programs, exclusive access).
-
-                **Failure Indicator Alerts:** Highlight early warning signs that the MVP might not perform as expected, based on benchmarks and historical insights.
-
-                **Market Resonance Insights:** Recommend tools or surveys to measure how well the MVP resonates with the target audience, beyond traditional KPIs.
-                """)
+                st.markdown(f"**Risk Radar:** {phase_info['Risk Radar']}")
 
             st.markdown("---")
 
@@ -454,16 +447,18 @@ def main():
             if st.session_state.kpi_suggestions:
                 st.subheader("Suggested KPIs")
                 # Allow users to select KPIs
-                kpi_options = [f"{kpi['name']}: {kpi['description']}" for kpi in st.session_state.kpi_suggestions.get(phase, [])]
-                
-                # Assign a unique key to the multiselect to prevent duplication
-                selected = st.multiselect("Select KPIs you want to track:", options=kpi_options, key=f"kpi_multiselect_{phase}")
+                kpi_options = [f"{kpi['name']}: {kpi['description']}" for kpi in get_predefined_kpis(phase, st.session_state.survey_responses)]
+                selected = st.multiselect(
+                    "Select KPIs you want to track:",
+                    options=kpi_options,
+                    key=f"kpi_multiselect_{phase}"
+                )
 
                 # Map selected options back to KPI structures
                 selected_struct = []
                 for sel in selected:
                     kpi_name = sel.split(":")[0]
-                    for kpi in st.session_state.kpi_suggestions.get(phase, []):
+                    for kpi in get_predefined_kpis(phase, st.session_state.survey_responses):
                         if kpi['name'] == kpi_name:
                             selected_struct.append(kpi)
                             break
@@ -525,12 +520,9 @@ def main():
                         # Generate Imaginary Data
                         elif data_option == "Generate Imaginary Data":
                             # Retrieve survey responses
-                            if "survey_responses" in st.session_state:
-                                industry = st.session_state.survey_responses.get("Industry", "General")
-                                product_audience = st.session_state.survey_responses.get("Product Audience", "General")
-                            else:
-                                industry = "General"
-                                product_audience = "General"
+                            survey = st.session_state.survey_responses
+                            industry = survey.get("Industry", "General")
+                            product_audience = survey.get("Product Audience", "General")
 
                             if st.button(f"Generate Data for '{kpi['name']}'", key=f"generate_{kpi['name']}"):
                                 with st.spinner("Generating data..."):
