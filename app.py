@@ -57,10 +57,13 @@ def export_kpis_pdf(kpi_list):
 # Plotting Function
 def plot_kpi_chart(kpi_name, data_points):
     """Generate an interactive and enhanced trend chart for a specific KPI using Plotly."""
+    # Ensure 'Time Period' is sorted
+    data_points = data_points.sort_values('Time Period')
+
     # Calculate a 3-month moving average
-    data_points['Moving Average'] = data_points['Value'].rolling(window=3).mean()
+    data_points['Moving Average'] = data_points['Value'].rolling(window=3, min_periods=1).mean()
     
-    # Create the line chart with markers
+    # Create the primary line chart with markers
     fig = px.line(
         data_points,
         x='Time Period',
@@ -70,16 +73,20 @@ def plot_kpi_chart(kpi_name, data_points):
         labels={"Value": kpi_name}
     )
     
-    # Add moving average line
-    fig.add_traces(px.line(
+    # Generate the moving average line as a separate figure
+    moving_avg_fig = px.line(
         data_points,
         x='Time Period',
         y='Moving Average',
         markers=False,
-        line=dict(dash='dash')
-    ).data)
+        line=dict(dash='dash', color='orange'),
+        labels={"Moving Average": "3-Month Moving Avg"}
+    )
     
-    # Add annotations (example: mid-year review)
+    # Add the moving average trace to the primary figure
+    fig.add_traces(moving_avg_fig.data)
+    
+    # Optional: Add annotations (e.g., Mid-year Review)
     if 'Month 6' in data_points['Time Period'].values:
         month6_value = data_points[data_points['Time Period'] == 'Month 6']['Value'].values[0]
         fig.add_annotation(
@@ -87,8 +94,39 @@ def plot_kpi_chart(kpi_name, data_points):
             y=month6_value,
             text="Mid-year Review",
             showarrow=True,
-            arrowhead=1
+            arrowhead=1,
+            bgcolor="yellow",
+            opacity=0.7
         )
+    
+    # Add shapes (e.g., threshold line)
+    threshold = 1500  # Example threshold value
+    fig.add_shape(
+        dict(
+            type="line",
+            x0="Month 1",
+            y0=threshold,
+            x1="Month 12",
+            y1=threshold,
+            line=dict(
+                color="Red",
+                width=2,
+                dash="dash",
+            ),
+        )
+    )
+    fig.add_annotation(
+        x="Month 12",
+        y=threshold,
+        xref="x",
+        yref="y",
+        text="Target Threshold",
+        showarrow=False,
+        yanchor="bottom",
+        bgcolor="red",
+        opacity=0.7,
+        font=dict(color="white")
+    )
     
     # Update layout for better aesthetics
     fig.update_layout(
@@ -101,12 +139,20 @@ def plot_kpi_chart(kpi_name, data_points):
             y=0.99,
             bgcolor='rgba(0,0,0,0)',
             bordercolor='rgba(0,0,0,0)'
-        )
+        ),
+        margin=dict(l=40, r=40, t=60, b=40)
     )
     
     # Update hover template for clarity
     fig.update_traces(
         hovertemplate="<b>%{x}</b><br>%{y}"
+    )
+    
+    # Customize the layout for better spacing and readability
+    fig.update_layout(
+        autosize=True,
+        width=800,
+        height=600
     )
     
     return fig
@@ -498,7 +544,7 @@ def main():
                 st.markdown(f"- {target}")
             st.markdown(f"**Similar Companies’ Results:** {phase_info['Similar Companies’ Results']}")
             st.markdown(f"**Additional Creative Outputs:** {phase_info['Additional Creative Outputs']}")
-            
+    
             # Display Risk Radar for POC phase
             if phase == "POC":
                 st.markdown(f"**Risk Radar:** {phase_info['Risk Radar']}")
