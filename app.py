@@ -1,9 +1,50 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from fpdf import FPDF
+from fpdf import FPDF  # Ensure using fpdf2
 import numpy as np
 import json
+
+# Define benchmark ranges for KPIs based on industry
+BENCHMARKS = {
+    "Technology": {
+        "User Engagement Score": {"base": 65, "growth": 1.5, "std_dev": 2},
+        "Feedback Implementation Rate": {"base": 70, "growth": 1.2, "std_dev": 1},
+        "Bug Fix Rate": {"base": 85, "growth": 1.0, "std_dev": 1},
+        "Net Promoter Score (NPS)": {"base": 40, "growth": 2.0, "std_dev": 5},
+        "Zillow Home Click Rate": {"base": 600, "growth": 30, "std_dev": 20},
+        "Adoption Rate": {"base": 25, "growth": 0.5, "std_dev": 0.3},
+        "Customer Satisfaction Score (CSAT)": {"base": 4.0, "growth": 0.05, "std_dev": 0.1},
+        "Retention Rate": {"base": 50, "growth": 1.0, "std_dev": 2},
+        "Churn Rate": {"base": 5.0, "growth": 0.1, "std_dev": 0.3},
+        "Conversion Rate": {"base": 3.0, "growth": 0.05, "std_dev": 0.1}
+    },
+    "Healthcare": {
+        "User Engagement Score": {"base": 55, "growth": 1.3, "std_dev": 2},
+        "Feedback Implementation Rate": {"base": 75, "growth": 1.1, "std_dev": 1},
+        "Bug Fix Rate": {"base": 90, "growth": 0.8, "std_dev": 1},
+        "Net Promoter Score (NPS)": {"base": 35, "growth": 1.8, "std_dev": 5},
+        "Zillow Home Click Rate": {"base": 500, "growth": 25, "std_dev": 20},
+        "Adoption Rate": {"base": 20, "growth": 0.5, "std_dev": 0.3},
+        "Customer Satisfaction Score (CSAT)": {"base": 3.5, "growth": 0.05, "std_dev": 0.1},
+        "Retention Rate": {"base": 45, "growth": 1.0, "std_dev": 2},
+        "Churn Rate": {"base": 6.0, "growth": 0.1, "std_dev": 0.3},
+        "Conversion Rate": {"base": 2.5, "growth": 0.05, "std_dev": 0.1}
+    },
+    # Add other industries similarly
+    "General": {
+        "User Engagement Score": {"base": 60, "growth": 1.0, "std_dev": 2},
+        "Feedback Implementation Rate": {"base": 70, "growth": 1.0, "std_dev": 1},
+        "Bug Fix Rate": {"base": 85, "growth": 1.0, "std_dev": 1},
+        "Net Promoter Score (NPS)": {"base": 40, "growth": 1.5, "std_dev": 5},
+        "Zillow Home Click Rate": {"base": 550, "growth": 27, "std_dev": 20},
+        "Adoption Rate": {"base": 25, "growth": 0.5, "std_dev": 0.3},
+        "Customer Satisfaction Score (CSAT)": {"base": 4.0, "growth": 0.05, "std_dev": 0.1},
+        "Retention Rate": {"base": 50, "growth": 1.0, "std_dev": 2},
+        "Churn Rate": {"base": 5.0, "growth": 0.1, "std_dev": 0.3},
+        "Conversion Rate": {"base": 3.0, "growth": 0.05, "std_dev": 0.1}
+    }
+}
 
 # Initialize session state variables
 if "survey_completed" not in st.session_state:
@@ -24,10 +65,10 @@ def export_kpis_json(kpi_list):
     """Export KPIs as JSON file."""
     try:
         json_str = json.dumps(kpi_list, indent=4)
-        return json_str
+        return json_str.encode('utf-8')
     except TypeError as e:
         st.error(f"Error exporting KPIs to JSON: {e}")
-        return ""
+        return b""
 
 def export_kpis_text(kpi_list):
     """Export KPIs as a plain text file."""
@@ -39,19 +80,34 @@ def export_kpis_text(kpi_list):
     return "\n".join(text_lines).encode('utf-8')
 
 def export_kpis_pdf(kpi_list):
-    """Export KPIs as a PDF file."""
+    """Export KPIs as a PDF file using fpdf2 with UTF-8 support."""
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", size=12)
+    
+    # Optional: Add a Unicode font
+    # pdf.add_font("DejaVu", "", "DejaVuSans.ttf", uni=True)
+    # pdf.set_font("DejaVu", size=12)
+    
+    # Title
+    pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, "Selected KPIs", ln=True, align='C')
     pdf.ln(10)
+    
     for kpi in kpi_list:
+        # KPI Name
         pdf.set_font("Arial", 'B', 12)
         pdf.multi_cell(0, 10, f"KPI: {kpi['name']}")
+        
+        # KPI Description
         pdf.set_font("Arial", '', 12)
         pdf.multi_cell(0, 10, f"Description: {kpi['description']}")
+        
+        # KPI Guidance
         pdf.multi_cell(0, 10, f"Guidance: {kpi['guidance']}\n")
-    pdf_output = pdf.output(dest='S').encode('latin-1')  # Return as bytes
+    
+    # Generate PDF as bytes
+    pdf_output = pdf.output(dest='S').encode('latin-1', 'replace')  # Handle non-latin1 chars
+    
     return pdf_output
 
 # Revised Plotting Function
@@ -290,86 +346,27 @@ def generate_focused_fake_data(industry, product_audience, kpi_name):
     # Initialize empty list for values
     values = []
     
-    # Example logic based on KPI and industry/product audience
-    # Expand this logic as needed
-    if kpi_name.lower() == "concept validation rate":
-        base = 75  # Starting at 75% validation
-        growth = 0.5
-        values = [round(base + (growth * i) + np.random.normal(0, 1), 2) for i in range(12)]
+    # Retrieve benchmarks based on industry
+    industry_benchmarks = BENCHMARKS.get(industry, BENCHMARKS["General"])
     
-    elif kpi_name.lower() == "stakeholder satisfaction score":
-        base = 3.5  # Starting at 3.5 out of 5
-        growth = 0.05
-        values = [round(base + (growth * i) + np.random.normal(0, 0.2), 2) for i in range(12)]
+    # Get benchmark data for the KPI
+    benchmark = industry_benchmarks.get(kpi_name, {"base": 1000, "growth": 1.0, "std_dev": 2})
+    base = benchmark["base"]
+    growth = benchmark["growth"]
+    std_dev = benchmark.get("std_dev", 2)
     
-    elif kpi_name.lower() == "technical feasibility index":
-        base = 88  # Starting at 88% feasibility
-        growth = 0.3
-        values = [round(base + (growth * i) + np.random.normal(0, 0.2), 2) for i in range(12)]
-    
-    elif kpi_name.lower() == "resource utilization efficiency":
-        base = 95  # Starting at 95% efficiency
-        growth = 0.1
-        values = [round(base + (growth * i) + np.random.normal(0, 0.1), 2) for i in range(12)]
-    
-    elif kpi_name.lower() == "poc completion rate":
-        base = 90  # Starting at 90% completion
-        growth = 2  # Aim to reach 100% by month 5
-        values = [min(round(base + (growth * i) + np.random.normal(0, 1), 2), 100) for i in range(12)]
-    
-    elif kpi_name.lower() == "user engagement score":
-        base = 60  # Starting at 60% active user rate
-        growth = 1.0
-        values = [round(base + (growth * i) + np.random.normal(0, 2), 2) for i in range(12)]
-    
-    elif kpi_name.lower() == "feedback implementation rate":
-        base = 70  # Starting at 70% implementation
-        growth = 1.5
-        values = [min(round(base + (growth * i) + np.random.normal(0, 1), 2), 100) for i in range(12)]
-    
-    elif kpi_name.lower() == "bug fix rate":
-        base = 85  # Starting at 85% fix rate
-        growth = 2.0
-        values = [min(round(base + (growth * i) + np.random.normal(0, 1), 2), 100) for i in range(12)]
-    
-    elif kpi_name.lower() == "net promoter score (nps)":
-        base = 30  # Starting at 30 NPS
-        growth = 2
-        values = [round(base + (growth * i) + np.random.normal(0, 5), 2) for i in range(12)]
-    
-    elif kpi_name.lower() == "zillow home click rate":
-        base = 400
-        growth = 25
-        values = [int(base + (growth * i) + np.random.normal(0, 20)) for i in range(12)]
-    
-    elif kpi_name.lower() == "adoption rate":
-        base = 20  # Starting at 20% adoption
-        growth = 0.5
-        values = [min(round(base + (growth * i) + np.random.normal(0, 0.3), 2), 30) for i in range(12)]
-    
-    elif kpi_name.lower() == "customer satisfaction score (csat)":
-        base = 3.5  # Starting at 3.5 out of 5
-        growth = 0.05
-        values = [min(round(base + (growth * i) + np.random.normal(0, 0.1), 2), 5) for i in range(12)]
-    
-    elif kpi_name.lower() == "retention rate":
-        base = 50  # Starting at 50% retention
-        growth = 1.0
-        values = [round(base + (growth * i) + np.random.normal(0, 2), 2) for i in range(12)]
-    
-    elif kpi_name.lower() == "churn rate":
-        base = 5.0  # Starting at 5% churn
-        growth = 0.1
-        values = [max(round(base + (growth * i) + np.random.normal(0, 0.3), 2), 0) for i in range(12)]
-    
-    elif kpi_name.lower() == "conversion rate":
-        base = 2.0  # Starting at 2% conversion
-        growth = 0.05
-        values = [round(base + (growth * i) + np.random.normal(0, 0.1), 2) for i in range(12)]
-    
+    # Generate data based on KPI type
+    if "score" in kpi_name.lower() or "rate" in kpi_name.lower() or "index" in kpi_name.lower():
+        for i in range(12):
+            value = base + (growth * i) + np.random.normal(0, std_dev)
+            # Handle percentage KPIs
+            if "score" in kpi_name.lower() or "rate" in kpi_name.lower() or "index" in kpi_name.lower():
+                value = max(min(value, 100), 0)  # Clamp between 0 and 100
+            values.append(round(value, 2))
     else:
-        # Default fake data with some randomness
-        values = [int(1000 + 500 * np.random.rand()) for _ in range(12)]
+        for i in range(12):
+            value = base * (growth ** i) + np.random.normal(0, std_dev)
+            values.append(int(value))
     
     data = {
         "Time Period": time_periods,
@@ -795,4 +792,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
