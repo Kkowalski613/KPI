@@ -14,7 +14,7 @@ st.session_state.kpi_data = st.session_state.get("kpi_data", {})
 st.session_state.kpi_explanations = st.session_state.get("kpi_explanations", {})
 st.session_state.phase_outputs = st.session_state.get("phase_outputs", {})
 
-# Export Functions (As previously defined)
+# Export Functions
 def export_kpis_csv(kpi_list):
     """Export KPIs as a CSV file."""
     df = pd.DataFrame(kpi_list)
@@ -54,7 +54,7 @@ def export_kpis_pdf(kpi_list):
     pdf_output = pdf.output(dest='S').encode('latin-1')  # Return as bytes
     return pdf_output
 
-# Corrected Plotting Function
+# Revised Plotting Function
 def plot_kpi_chart(kpi_name, data_points):
     """Generate an interactive and enhanced trend chart for a specific KPI using Plotly."""
     # Ensure 'Time Period' is sorted
@@ -103,7 +103,7 @@ def plot_kpi_chart(kpi_name, data_points):
         )
     
     # Add shapes (e.g., threshold line)
-    threshold = 1500  # Example threshold value
+    threshold = 1500  # Example threshold value; adjust based on KPI
     fig.add_shape(
         dict(
             type="line",
@@ -171,7 +171,7 @@ def explain_kpis(kpi_list):
         explanations[kpi['name']] = f"{kpi['description']} ({kpi['guidance']})"
     return explanations
 
-# Define Pre-Defined KPIs per Phase
+# Revised Pre-Defined KPIs per Phase
 def get_predefined_kpis(phase, survey_responses):
     """
     Returns a list of KPIs based on the phase and survey responses.
@@ -185,52 +185,82 @@ def get_predefined_kpis(phase, survey_responses):
         "POC": [
             {
                 "name": "Concept Validation Rate",
-                "description": "Measures the percentage of concepts validated during the POC.",
-                "guidance": "Aim for at least 70% validation to proceed."
+                "description": "Percentage of key features or concepts validated through initial testing or stakeholder feedback.",
+                "guidance": "Aim for ≥ 80% validation rate."
             },
             {
-                "name": "Stakeholder Engagement",
-                "description": "Tracks the level of stakeholder involvement and feedback.",
-                "guidance": "Maintain active engagement with at least 80% of stakeholders."
+                "name": "Stakeholder Satisfaction Score",
+                "description": "Average satisfaction rating from stakeholders involved in the POC.",
+                "guidance": "Aim for ≥ 4 out of 5."
             },
             {
-                "name": "Technical Feasibility",
-                "description": "Assesses the technical viability of the proposed solution.",
-                "guidance": "Ensure that 90% of technical requirements are met."
+                "name": "Technical Feasibility Index",
+                "description": "Percentage of technical requirements met without major issues.",
+                "guidance": "Aim for ≥ 90% feasibility."
+            },
+            {
+                "name": "Resource Utilization Efficiency",
+                "description": "Ratio of actual resource usage to planned resource allocation.",
+                "guidance": "Aim for ≥ 95% efficiency."
+            },
+            {
+                "name": "POC Completion Rate",
+                "description": "Percentage of POC milestones achieved within the planned timeframe.",
+                "guidance": "Aim for ≥ 100% completion."
             }
         ],
         "Closed Beta": [
             {
-                "name": "User Engagement",
-                "description": "Measures how actively users interact with the product.",
-                "guidance": "Target a monthly active user rate of 60%."
+                "name": "User Engagement Score",
+                "description": "Measures active user interactions, such as daily/monthly active users.",
+                "guidance": "Aim for ≥ 60% active user rate."
             },
             {
-                "name": "Feedback Quality",
-                "description": "Evaluates the usefulness and applicability of user feedback.",
-                "guidance": "Aim for actionable feedback from at least 75% of participants."
+                "name": "Feedback Implementation Rate",
+                "description": "Percentage of user feedback items that are addressed and implemented.",
+                "guidance": "Aim for ≥ 75% implementation."
             },
             {
-                "name": "Bug Resolution Rate",
-                "description": "Tracks the rate at which reported bugs are fixed.",
-                "guidance": "Resolve 90% of critical bugs within two weeks."
+                "name": "Bug Fix Rate",
+                "description": "Percentage of reported bugs resolved within the beta period.",
+                "guidance": "Aim for ≥ 90% fix rate."
+            },
+            {
+                "name": "Net Promoter Score (NPS)",
+                "description": "Measures user willingness to recommend the product to others.",
+                "guidance": "Aim for ≥ 50 NPS."
+            },
+            {
+                "name": "Zillow Home Click Rate",
+                "description": "Tracks the number of clicks on Zillow home listings within the app.",
+                "guidance": "Aim for ≥ 500 clicks per month."
             }
         ],
         "Public MVP": [
             {
                 "name": "Adoption Rate",
-                "description": "Measures the rate at which new users adopt the MVP.",
-                "guidance": "Target an adoption rate of 25% within the first quarter."
+                "description": "Percentage of target users who adopt the MVP within a specific timeframe.",
+                "guidance": "Aim for ≥ 25% within the first quarter."
             },
             {
-                "name": "Customer Satisfaction",
-                "description": "Assesses overall user satisfaction with the MVP.",
-                "guidance": "Achieve a satisfaction score of 4 out of 5."
+                "name": "Customer Satisfaction Score (CSAT)",
+                "description": "Average satisfaction rating from users post-interaction or usage.",
+                "guidance": "Aim for ≥ 4 out of 5."
             },
             {
                 "name": "Retention Rate",
-                "description": "Tracks the percentage of users who continue using the MVP over time.",
-                "guidance": "Maintain a retention rate of at least 50% after six months."
+                "description": "Percentage of users who continue using the MVP over a set period.",
+                "guidance": "Aim for ≥ 50% after six months."
+            },
+            {
+                "name": "Churn Rate",
+                "description": "Percentage of users who stop using the MVP within a specific period.",
+                "guidance": "Aim for ≤ 5% per month."
+            },
+            {
+                "name": "Conversion Rate",
+                "description": "Percentage of users who take a desired action (e.g., sign-up, purchase).",
+                "guidance": "Aim for ≥ 3%."
             }
         ]
     }
@@ -243,12 +273,12 @@ def get_predefined_kpis(phase, survey_responses):
         predefined_kpis["Closed Beta"].append({
             "name": "Zillow Home Click Rate",
             "description": "Tracks the number of clicks on Zillow home listings within the app.",
-            "guidance": "Aim for a click rate of at least 500 clicks per month."
+            "guidance": "Aim for ≥ 500 clicks per month."
         })
     
     return predefined_kpis.get(phase, [])
 
-# Function to generate fake data based on Industry and Product Audience
+# Revised Data Generation Function
 def generate_focused_fake_data(industry, product_audience, kpi_name):
     """
     Generate fake data based on Industry, Product Audience, and KPI.
@@ -262,59 +292,80 @@ def generate_focused_fake_data(industry, product_audience, kpi_name):
     
     # Example logic based on KPI and industry/product audience
     # Expand this logic as needed
-    if kpi_name.lower() == "user engagement":
-        if "B2B" in product_audience:
-            base = 1000
-            growth = 1.05
-            values = [int(base * (growth ** i) + np.random.normal(0, 50)) for i in range(12)]
-        elif "B2C" in product_audience:
-            base = 500
-            growth = 1.1
-            values = [int(base * (growth ** i) + np.random.normal(0, 30)) for i in range(12)]
-        else:
-            base = 800
-            growth = 1.07
-            values = [int(base * (growth ** i) + np.random.normal(0, 40)) for i in range(12)]
-    
-    elif kpi_name.lower() == "zillow home click rate":
-        base = 200
-        growth = 1.08
-        values = [int(base * (growth ** i) + np.random.normal(0, 20)) for i in range(12)]
-    
-    elif kpi_name.lower() == "revenue growth":
-        base = 10000
-        growth = 1.08
-        values = [int(base * (growth ** i) + np.random.normal(0, 1000)) for i in range(12)]
-    
-    elif kpi_name.lower() == "customer acquisition":
-        base = 200
-        growth = 1.1
-        values = [int(base * (growth ** i) + np.random.normal(0, 15)) for i in range(12)]
-    
-    elif kpi_name.lower() == "conversion rate":
-        base = 2.5  # in percentage
-        growth = 0.05
-        values = [round(base + (growth * i) + np.random.normal(0, 0.2), 2) for i in range(12)]
-    
-    elif kpi_name.lower() == "churn rate":
-        base = 5.0  # in percentage
-        growth = 0.1
-        values = [round(base + (growth * i) + np.random.normal(0, 0.3), 2) for i in range(12)]
-    
-    elif kpi_name.lower() == "concept validation rate":
-        base = 70  # in percentage
+    if kpi_name.lower() == "concept validation rate":
+        base = 75  # Starting at 75% validation
         growth = 0.5
         values = [round(base + (growth * i) + np.random.normal(0, 1), 2) for i in range(12)]
     
-    elif kpi_name.lower() == "stakeholder engagement":
-        base = 80  # in percentage
-        growth = 0.3
-        values = [round(base + (growth * i) + np.random.normal(0, 0.5), 2) for i in range(12)]
-    
-    elif kpi_name.lower() == "technical feasibility":
-        base = 90  # in percentage
-        growth = 0.2
+    elif kpi_name.lower() == "stakeholder satisfaction score":
+        base = 3.5  # Starting at 3.5 out of 5
+        growth = 0.05
         values = [round(base + (growth * i) + np.random.normal(0, 0.2), 2) for i in range(12)]
+    
+    elif kpi_name.lower() == "technical feasibility index":
+        base = 88  # Starting at 88% feasibility
+        growth = 0.3
+        values = [round(base + (growth * i) + np.random.normal(0, 0.2), 2) for i in range(12)]
+    
+    elif kpi_name.lower() == "resource utilization efficiency":
+        base = 95  # Starting at 95% efficiency
+        growth = 0.1
+        values = [round(base + (growth * i) + np.random.normal(0, 0.1), 2) for i in range(12)]
+    
+    elif kpi_name.lower() == "poc completion rate":
+        base = 90  # Starting at 90% completion
+        growth = 2  # Aim to reach 100% by month 5
+        values = [min(round(base + (growth * i) + np.random.normal(0, 1), 2), 100) for i in range(12)]
+    
+    elif kpi_name.lower() == "user engagement score":
+        base = 60  # Starting at 60% active user rate
+        growth = 1.0
+        values = [round(base + (growth * i) + np.random.normal(0, 2), 2) for i in range(12)]
+    
+    elif kpi_name.lower() == "feedback implementation rate":
+        base = 70  # Starting at 70% implementation
+        growth = 1.5
+        values = [min(round(base + (growth * i) + np.random.normal(0, 1), 2), 100) for i in range(12)]
+    
+    elif kpi_name.lower() == "bug fix rate":
+        base = 85  # Starting at 85% fix rate
+        growth = 2.0
+        values = [min(round(base + (growth * i) + np.random.normal(0, 1), 2), 100) for i in range(12)]
+    
+    elif kpi_name.lower() == "net promoter score (nps)":
+        base = 30  # Starting at 30 NPS
+        growth = 2
+        values = [round(base + (growth * i) + np.random.normal(0, 5), 2) for i in range(12)]
+    
+    elif kpi_name.lower() == "zillow home click rate":
+        base = 400
+        growth = 25
+        values = [int(base + (growth * i) + np.random.normal(0, 20)) for i in range(12)]
+    
+    elif kpi_name.lower() == "adoption rate":
+        base = 20  # Starting at 20% adoption
+        growth = 0.5
+        values = [min(round(base + (growth * i) + np.random.normal(0, 0.3), 2), 30) for i in range(12)]
+    
+    elif kpi_name.lower() == "customer satisfaction score (csat)":
+        base = 3.5  # Starting at 3.5 out of 5
+        growth = 0.05
+        values = [min(round(base + (growth * i) + np.random.normal(0, 0.1), 2), 5) for i in range(12)]
+    
+    elif kpi_name.lower() == "retention rate":
+        base = 50  # Starting at 50% retention
+        growth = 1.0
+        values = [round(base + (growth * i) + np.random.normal(0, 2), 2) for i in range(12)]
+    
+    elif kpi_name.lower() == "churn rate":
+        base = 5.0  # Starting at 5% churn
+        growth = 0.1
+        values = [max(round(base + (growth * i) + np.random.normal(0, 0.3), 2), 0) for i in range(12)]
+    
+    elif kpi_name.lower() == "conversion rate":
+        base = 2.0  # Starting at 2% conversion
+        growth = 0.05
+        values = [round(base + (growth * i) + np.random.normal(0, 0.1), 2) for i in range(12)]
     
     else:
         # Default fake data with some randomness
@@ -408,7 +459,7 @@ def survey_page():
 
         # Question 5
         st.markdown("### **5. Do you already sell other products or services to your target audience?**")
-        sell_to_audience = st.radio("", ["Yes", "No"], key="sell_to_audience_radio")
+        sell_to_audience = st.radio("Do you already sell other products or services to your target audience?", ["Yes", "No"], key="sell_to_audience_radio")
 
         st.markdown("---")
 
@@ -558,7 +609,7 @@ def main():
                 st.markdown(f"- {target}")
             st.markdown(f"**Similar Companies’ Results:** {phase_info['Similar Companies’ Results']}")
             st.markdown(f"**Additional Creative Outputs:** {phase_info['Additional Creative Outputs']}")
-    
+
             # Display Risk Radar for POC phase
             if phase == "POC":
                 st.markdown(f"**Risk Radar:** {phase_info['Risk Radar']}")
