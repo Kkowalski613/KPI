@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
 from fpdf import FPDF
 import numpy as np
+import json
 
 # Initialize session state variables
 if "survey_completed" not in st.session_state:
@@ -180,13 +181,19 @@ def explain_kpis(kpi_list):
 
 # Export Functions
 def plot_kpi_chart(kpi_name, data_points):
-    """Generate a trend chart for a specific KPI."""
-    fig, ax = plt.subplots()
-    ax.plot(data_points['Time Period'], data_points['Value'], marker='o')
-    ax.set_title(f"KPI: {kpi_name}")
-    ax.set_xlabel("Time Period")
-    ax.set_ylabel("Value")
-    fig.tight_layout()
+    """Generate an interactive trend chart for a specific KPI using Plotly."""
+    fig = px.line(
+        data_points,
+        x='Time Period',
+        y='Value',
+        title=f"KPI: {kpi_name}",
+        markers=True
+    )
+    fig.update_layout(
+        xaxis_title="Time Period",
+        yaxis_title="Value",
+        hovermode="x unified"
+    )
     return fig
 
 def export_kpis_csv(kpi_list):
@@ -196,7 +203,12 @@ def export_kpis_csv(kpi_list):
 
 def export_kpis_json(kpi_list):
     """Export KPIs as JSON file."""
-    return json.dumps(kpi_list, indent=4).encode('utf-8')
+    try:
+        json_str = json.dumps(kpi_list, indent=4)
+        return json_str
+    except TypeError as e:
+        st.error(f"Error exporting KPIs to JSON: {e}")
+        return ""
 
 def export_kpis_text(kpi_list):
     """Export KPIs as a plain text file."""
@@ -390,21 +402,25 @@ def survey_page():
             for phase in phases:
                 kpis = get_predefined_kpis(phase, st.session_state.survey_responses)
                 phase_outputs[phase] = {
-                    "Primary Objective": f"Primary objective for the {phase} phase.",
+                    "Primary Objective": f"Define the primary objective for the {phase} phase based on your survey inputs.",
                     "Top 3 KPIs": [kpi['name'] for kpi in kpis[:3]],
                     "Benchmarks/Targets": [kpi['guidance'] for kpi in kpis[:3]],
-                    "Similar Companies’ Results": f"Examples of companies that have undertaken similar {phase} phases and their outcomes.",
-                    "Additional Creative Outputs": f"Additional creative outputs for the {phase} phase."
+                    "Similar Companies’ Results": f"Provide examples of companies that have undertaken similar {phase} phases and their outcomes.",
+                    "Additional Creative Outputs": f"Provide additional creative outputs tailored to the {phase} phase."
                 }
 
                 # Add Risk Radar for POC phase
                 if phase == "POC":
-                    phase_outputs[phase]["Risk Radar"] = f"Potential risks or failure points for the {phase} phase and mitigation strategies."
+                    phase_outputs[phase]["Risk Radar"] = f"Identify potential risks or failure points for the {phase} phase and suggest mitigation strategies."
 
             st.session_state.phase_outputs = phase_outputs
-            st.session_state.kpi_suggestions = phase_outputs
-            st.session_state.kpi_explanations = explain_kpis(kpis)
-
+            st.session_state.kpi_suggestions = phase_outputs  # Store KPIs per phase
+            # Store actual KPIs separately
+            st.session_state.kpi_suggestions = {
+                phase: get_predefined_kpis(phase, st.session_state.survey_responses)
+                for phase in phases
+            }
+            st.session_state.kpi_explanations = explain_kpis(kpis)  # Generate explanations for last phase
             st.success("Phase outputs generated successfully! You can now access the KPI tools.")
 
 # Main App Logic
@@ -436,7 +452,7 @@ def main():
                 st.markdown(f"- {target}")
             st.markdown(f"**Similar Companies’ Results:** {phase_info['Similar Companies’ Results']}")
             st.markdown(f"**Additional Creative Outputs:** {phase_info['Additional Creative Outputs']}")
-
+            
             # Display Risk Radar for POC phase
             if phase == "POC":
                 st.markdown(f"**Risk Radar:** {phase_info['Risk Radar']}")
@@ -447,7 +463,7 @@ def main():
             if st.session_state.kpi_suggestions:
                 st.subheader("Suggested KPIs")
                 # Allow users to select KPIs
-                kpi_options = [f"{kpi['name']}: {kpi['description']}" for kpi in get_predefined_kpis(phase, st.session_state.survey_responses)]
+                kpi_options = [f"{kpi['name']}: {kpi['description']}" for kpi in st.session_state.kpi_suggestions.get(phase, [])]
                 selected = st.multiselect(
                     "Select KPIs you want to track:",
                     options=kpi_options,
@@ -458,7 +474,7 @@ def main():
                 selected_struct = []
                 for sel in selected:
                     kpi_name = sel.split(":")[0]
-                    for kpi in get_predefined_kpis(phase, st.session_state.survey_responses):
+                    for kpi in st.session_state.kpi_suggestions.get(phase, []):
                         if kpi['name'] == kpi_name:
                             selected_struct.append(kpi)
                             break
@@ -553,9 +569,9 @@ def main():
                             df = st.session_state.kpi_data[kpi['name']]
                             st.write(f"### Data for '{kpi['name']}'")
                             st.dataframe(df)
-                            # Plotting
+                            # Plotting with Plotly
                             fig = plot_kpi_chart(kpi['name'], df)
-                            st.pyplot(fig)
+                            st.plotly_chart(fig, use_container_width=True)
 
             # KPI Explanations Tab
             with tabs[2]:
@@ -615,3 +631,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
