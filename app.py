@@ -8,20 +8,333 @@ import re
 
 # -------------------- Configuration --------------------
 
-# Define benchmark ranges for KPIs based on industry
-BENCHMARKS = {
+# Define benchmark ranges for KPIs based on industry and product type
+# This is a nested dictionary mapping Industry -> Product Type -> Phase -> KPIs
+KPIS = {
     "Real Estate": {
-        "User Engagement": {"base": 60, "growth": 5, "std_dev": 5},
-        "Home Clicks": {"base": 1000, "growth": 200, "std_dev": 100},
-        "Accounts Activated": {"base": 500, "growth": 50, "std_dev": 30},
-        "Subscriptions Renewed": {"base": 400, "growth": 40, "std_dev": 25}
+        "B2C": {
+            "POC": [
+                {
+                    "name": "User Engagement",
+                    "description": "Measures the level of user interaction with the platform during the POC phase.",
+                    "guidance": "Aim for ≥ 60% engagement rate."
+                },
+                {
+                    "name": "Home Clicks",
+                    "description": "Tracks the number of clicks on home listings within the platform.",
+                    "guidance": "Aim for ≥ 1000 clicks per month."
+                },
+                {
+                    "name": "Accounts Activated",
+                    "description": "Number of new user accounts activated during the POC phase.",
+                    "guidance": "Aim for ≥ 500 activations."
+                }
+            ],
+            "Closed Beta": [
+                {
+                    "name": "User Engagement",
+                    "description": "Measures the continued interaction of users with the platform during the Closed Beta phase.",
+                    "guidance": "Aim for ≥ 70% engagement rate."
+                },
+                {
+                    "name": "Subscriptions Renewed",
+                    "description": "Tracks the number of user subscriptions that are renewed during the beta period.",
+                    "guidance": "Aim for ≥ 400 renewals."
+                },
+                {
+                    "name": "Home Clicks",
+                    "description": "Monitors the engagement with home listings within the platform.",
+                    "guidance": "Aim for ≥ 1200 clicks per month."
+                }
+            ],
+            "Public MVP": [
+                {
+                    "name": "User Engagement",
+                    "description": "Assessing user interaction and activity levels post-launch of the MVP.",
+                    "guidance": "Aim for ≥ 80% engagement rate."
+                },
+                {
+                    "name": "Subscriptions Renewed",
+                    "description": "Measures the retention of user subscriptions over time.",
+                    "guidance": "Aim for ≥ 500 renewals."
+                },
+                {
+                    "name": "Accounts Activated",
+                    "description": "Number of new user accounts activated after MVP launch.",
+                    "guidance": "Aim for ≥ 600 activations."
+                }
+            ]
+        },
+        "B2B": {
+            "POC": [
+                {
+                    "name": "Client Engagement",
+                    "description": "Measures the level of interaction from client businesses during the POC phase.",
+                    "guidance": "Aim for ≥ 65% engagement rate."
+                },
+                {
+                    "name": "Demo Requests",
+                    "description": "Tracks the number of demo requests from potential business clients.",
+                    "guidance": "Aim for ≥ 300 demo requests per month."
+                },
+                {
+                    "name": "Accounts Created",
+                    "description": "Number of new business accounts created during the POC phase.",
+                    "guidance": "Aim for ≥ 400 account creations."
+                }
+            ],
+            "Closed Beta": [
+                {
+                    "name": "Client Engagement",
+                    "description": "Measures the continued interaction from client businesses during the Closed Beta phase.",
+                    "guidance": "Aim for ≥ 75% engagement rate."
+                },
+                {
+                    "name": "Subscriptions Renewed",
+                    "description": "Tracks the number of business subscriptions that are renewed during the beta period.",
+                    "guidance": "Aim for ≥ 450 renewals."
+                },
+                {
+                    "name": "Demo Requests",
+                    "description": "Monitors the number of demo requests from potential business clients.",
+                    "guidance": "Aim for ≥ 350 demo requests per month."
+                }
+            ],
+            "Public MVP": [
+                {
+                    "name": "Client Engagement",
+                    "description": "Assessing client business interaction and activity levels post-launch of the MVP.",
+                    "guidance": "Aim for ≥ 85% engagement rate."
+                },
+                {
+                    "name": "Subscriptions Renewed",
+                    "description": "Measures the retention of business subscriptions over time.",
+                    "guidance": "Aim for ≥ 550 renewals."
+                },
+                {
+                    "name": "Accounts Created",
+                    "description": "Number of new business accounts created after MVP launch.",
+                    "guidance": "Aim for ≥ 650 account creations."
+                }
+            ]
+        }
     },
-    # Add other industries similarly
+    "Retail": {
+        "B2C": {
+            "POC": [
+                {
+                    "name": "Customer Engagement",
+                    "description": "Measures the level of customer interaction with the retail platform during the POC phase.",
+                    "guidance": "Aim for ≥ 70% engagement rate."
+                },
+                {
+                    "name": "Product Views",
+                    "description": "Tracks the number of views on products within the platform.",
+                    "guidance": "Aim for ≥ 1500 product views per month."
+                },
+                {
+                    "name": "Accounts Registered",
+                    "description": "Number of new customer accounts registered during the POC phase.",
+                    "guidance": "Aim for ≥ 600 registrations."
+                }
+            ],
+            "Closed Beta": [
+                {
+                    "name": "Customer Engagement",
+                    "description": "Measures the continued interaction from customers during the Closed Beta phase.",
+                    "guidance": "Aim for ≥ 80% engagement rate."
+                },
+                {
+                    "name": "Subscriptions Renewed",
+                    "description": "Tracks the number of customer subscriptions that are renewed during the beta period.",
+                    "guidance": "Aim for ≥ 500 renewals."
+                },
+                {
+                    "name": "Product Views",
+                    "description": "Monitors the number of views on products within the platform.",
+                    "guidance": "Aim for ≥ 1800 product views per month."
+                }
+            ],
+            "Public MVP": [
+                {
+                    "name": "Customer Engagement",
+                    "description": "Assessing customer interaction and activity levels post-launch of the MVP.",
+                    "guidance": "Aim for ≥ 90% engagement rate."
+                },
+                {
+                    "name": "Subscriptions Renewed",
+                    "description": "Measures the retention of customer subscriptions over time.",
+                    "guidance": "Aim for ≥ 600 renewals."
+                },
+                {
+                    "name": "Accounts Registered",
+                    "description": "Number of new customer accounts registered after MVP launch.",
+                    "guidance": "Aim for ≥ 700 registrations."
+                }
+            ]
+        },
+        "B2B": {
+            "POC": [
+                {
+                    "name": "Client Engagement",
+                    "description": "Measures the level of interaction from business clients during the POC phase.",
+                    "guidance": "Aim for ≥ 68% engagement rate."
+                },
+                {
+                    "name": "Demo Requests",
+                    "description": "Tracks the number of demo requests from potential business clients.",
+                    "guidance": "Aim for ≥ 320 demo requests per month."
+                },
+                {
+                    "name": "Accounts Created",
+                    "description": "Number of new business accounts created during the POC phase.",
+                    "guidance": "Aim for ≥ 420 account creations."
+                }
+            ],
+            "Closed Beta": [
+                {
+                    "name": "Client Engagement",
+                    "description": "Measures the continued interaction from business clients during the Closed Beta phase.",
+                    "guidance": "Aim for ≥ 78% engagement rate."
+                },
+                {
+                    "name": "Subscriptions Renewed",
+                    "description": "Tracks the number of business subscriptions that are renewed during the beta period.",
+                    "guidance": "Aim for ≥ 480 renewals."
+                },
+                {
+                    "name": "Demo Requests",
+                    "description": "Monitors the number of demo requests from potential business clients.",
+                    "guidance": "Aim for ≥ 370 demo requests per month."
+                }
+            ],
+            "Public MVP": [
+                {
+                    "name": "Client Engagement",
+                    "description": "Assessing business client interaction and activity levels post-launch of the MVP.",
+                    "guidance": "Aim for ≥ 88% engagement rate."
+                },
+                {
+                    "name": "Subscriptions Renewed",
+                    "description": "Measures the retention of business subscriptions over time.",
+                    "guidance": "Aim for ≥ 580 renewals."
+                },
+                {
+                    "name": "Accounts Created",
+                    "description": "Number of new business accounts created after MVP launch.",
+                    "guidance": "Aim for ≥ 680 account creations."
+                }
+            ]
+        }
+    },
+    # Add more industries and product types as needed
     "General": {
-        "User Engagement": {"base": 50, "growth": 4, "std_dev": 4},
-        "Home Clicks": {"base": 800, "growth": 150, "std_dev": 80},
-        "Accounts Activated": {"base": 400, "growth": 40, "std_dev": 25},
-        "Subscriptions Renewed": {"base": 300, "growth": 30, "std_dev": 20}
+        "B2C": {
+            "POC": [
+                {
+                    "name": "User Engagement",
+                    "description": "Measures the level of user interaction with the product during the POC phase.",
+                    "guidance": "Aim for ≥ 55% engagement rate."
+                },
+                {
+                    "name": "Product Interactions",
+                    "description": "Tracks the number of interactions users have with the product features.",
+                    "guidance": "Aim for ≥ 900 interactions per month."
+                },
+                {
+                    "name": "Accounts Registered",
+                    "description": "Number of new user accounts registered during the POC phase.",
+                    "guidance": "Aim for ≥ 450 registrations."
+                }
+            ],
+            "Closed Beta": [
+                {
+                    "name": "User Engagement",
+                    "description": "Measures the continued interaction of users with the product during the Closed Beta phase.",
+                    "guidance": "Aim for ≥ 65% engagement rate."
+                },
+                {
+                    "name": "Subscriptions Renewed",
+                    "description": "Tracks the number of user subscriptions that are renewed during the beta period.",
+                    "guidance": "Aim for ≥ 350 renewals."
+                },
+                {
+                    "name": "Product Interactions",
+                    "description": "Monitors the number of interactions users have with the product features.",
+                    "guidance": "Aim for ≥ 1100 interactions per month."
+                }
+            ],
+            "Public MVP": [
+                {
+                    "name": "User Engagement",
+                    "description": "Assessing user interaction and activity levels post-launch of the MVP.",
+                    "guidance": "Aim for ≥ 75% engagement rate."
+                },
+                {
+                    "name": "Subscriptions Renewed",
+                    "description": "Measures the retention of user subscriptions over time.",
+                    "guidance": "Aim for ≥ 450 renewals."
+                },
+                {
+                    "name": "Accounts Registered",
+                    "description": "Number of new user accounts registered after MVP launch.",
+                    "guidance": "Aim for ≥ 550 registrations."
+                }
+            ]
+        },
+        "B2B": {
+            "POC": [
+                {
+                    "name": "Client Engagement",
+                    "description": "Measures the level of interaction from client businesses during the POC phase.",
+                    "guidance": "Aim for ≥ 60% engagement rate."
+                },
+                {
+                    "name": "Demo Requests",
+                    "description": "Tracks the number of demo requests from potential business clients.",
+                    "guidance": "Aim for ≥ 280 demo requests per month."
+                },
+                {
+                    "name": "Accounts Created",
+                    "description": "Number of new business accounts created during the POC phase.",
+                    "guidance": "Aim for ≥ 380 account creations."
+                }
+            ],
+            "Closed Beta": [
+                {
+                    "name": "Client Engagement",
+                    "description": "Measures the continued interaction from client businesses during the Closed Beta phase.",
+                    "guidance": "Aim for ≥ 70% engagement rate."
+                },
+                {
+                    "name": "Subscriptions Renewed",
+                    "description": "Tracks the number of business subscriptions that are renewed during the beta period.",
+                    "guidance": "Aim for ≥ 400 renewals."
+                },
+                {
+                    "name": "Demo Requests",
+                    "description": "Monitors the number of demo requests from potential business clients.",
+                    "guidance": "Aim for ≥ 330 demo requests per month."
+                }
+            ],
+            "Public MVP": [
+                {
+                    "name": "Client Engagement",
+                    "description": "Assessing client business interaction and activity levels post-launch of the MVP.",
+                    "guidance": "Aim for ≥ 80% engagement rate."
+                },
+                {
+                    "name": "Subscriptions Renewed",
+                    "description": "Measures the retention of business subscriptions over time.",
+                    "guidance": "Aim for ≥ 500 renewals."
+                },
+                {
+                    "name": "Accounts Created",
+                    "description": "Number of new business accounts created after MVP launch.",
+                    "guidance": "Aim for ≥ 580 account creations."
+                }
+            ]
+        }
     }
 }
 
@@ -122,16 +435,25 @@ def plot_kpi_chart(kpi_name, data_points):
 # -------------------- OpenAI Data Generation --------------------
 
 def get_openai_api_key():
-    try:
-        return st.secrets["openai_api_key"]
-    except KeyError:
-        try:
-            return st.secrets["openai"]["api_key"]
-        except KeyError:
-            st.error(
-                "OpenAI API key not found. Please set `openai_api_key` or `openai.api_key` in Streamlit's secrets."
-            )
-            st.stop()
+    """
+    Retrieves the OpenAI API key from Streamlit secrets.
+    Supports both flat and nested secret structures.
+    """
+    # Attempt to retrieve from flat structure
+    api_key = st.secrets.get("openai_api_key")
+    if api_key:
+        return api_key
+    
+    # Attempt to retrieve from nested structure
+    api_key = st.secrets.get("openai", {}).get("api_key")
+    if api_key:
+        return api_key
+    
+    # If key is not found in either structure, display an error and stop the app
+    st.error(
+        "OpenAI API key not found. Please set `openai_api_key` or `openai.api_key` in Streamlit's secrets."
+    )
+    st.stop()
 
 def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_description):
     """
@@ -152,7 +474,7 @@ def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_descrip
         f"Product Audience: {product_audience}\n"
         f"KPI Name: {kpi_name}\n"
         f"KPI Description: {kpi_description}\n\n"
-        f"Assume the company operates similarly to Zillow. Provide the data in a JSON format with 'Time Period' and 'Value' keys."
+        f"Provide the data in a JSON format with 'Time Period' and 'Value' keys."
     )
     
     try:
@@ -217,66 +539,20 @@ def explain_kpis(kpi_list):
 
 def get_predefined_kpis(phase, survey_responses):
     """
-    Returns a list of practical KPIs based on the phase and survey responses.
+    Returns a list of practical KPIs based on the phase, industry, and product type from survey responses.
     """
     industry = survey_responses.get("Industry", "General")
     product_audience = survey_responses.get("Product Audience", "General")
     
-    predefined_kpis = {
-        "POC": [
-            {
-                "name": "User Engagement",
-                "description": "Measures the level of user interaction with the product during the POC phase.",
-                "guidance": "Aim for ≥ 60% engagement rate."
-            },
-            {
-                "name": "Home Clicks",
-                "description": "Tracks the number of clicks on home listings within the platform.",
-                "guidance": "Aim for ≥ 1000 clicks per month."
-            },
-            {
-                "name": "Accounts Activated",
-                "description": "Number of new user accounts activated during the POC phase.",
-                "guidance": "Aim for ≥ 500 activations."
-            }
-        ],
-        "Closed Beta": [
-            {
-                "name": "User Engagement",
-                "description": "Measures the continued interaction of users with the product during the Closed Beta phase.",
-                "guidance": "Aim for ≥ 70% engagement rate."
-            },
-            {
-                "name": "Subscriptions Renewed",
-                "description": "Tracks the number of user subscriptions that are renewed during the beta period.",
-                "guidance": "Aim for ≥ 400 renewals."
-            },
-            {
-                "name": "Home Clicks",
-                "description": "Monitors the engagement with home listings within the platform.",
-                "guidance": "Aim for ≥ 1200 clicks per month."
-            }
-        ],
-        "Public MVP": [
-            {
-                "name": "User Engagement",
-                "description": "Assessing user interaction and activity levels post-launch of the MVP.",
-                "guidance": "Aim for ≥ 80% engagement rate."
-            },
-            {
-                "name": "Subscriptions Renewed",
-                "description": "Measures the retention of user subscriptions over time.",
-                "guidance": "Aim for ≥ 500 renewals."
-            },
-            {
-                "name": "Accounts Activated",
-                "description": "Number of new user accounts activated after MVP launch.",
-                "guidance": "Aim for ≥ 600 activations."
-            }
-        ]
-    }
+    # Fetch KPIs based on industry and product type
+    industry_kpis = KPIS.get(industry, {}).get(product_audience, {}).get(phase, [])
     
-    return predefined_kpis.get(phase, [])
+    # If no KPIs found for the specific combination, fallback to General KPIs
+    if not industry_kpis:
+        st.warning(f"No specific KPIs found for Industry: {industry}, Product Audience: {product_audience}. Using general KPIs.")
+        industry_kpis = KPIS.get("General", {}).get(product_audience, {}).get(phase, [])
+    
+    return industry_kpis
 
 # -------------------- Survey Page --------------------
 
@@ -475,17 +751,14 @@ def survey_page():
 def main():
     st.set_page_config(page_title="KPI Creation and Tracking Kit", layout="wide")
 
-    # **Temporary Debugging Code: Remove after resolving the issue**
+    # **Temporary Debugging Code: Uncomment to list available secret keys**
     """
-    try:
-        api_key_flat = st.secrets["openai_api_key"]
-        st.write("Successfully accessed flat OpenAI API key.")
-    except KeyError:
-        try:
-            api_key_nested = st.secrets["openai"]["api_key"]
-            st.write("Successfully accessed nested OpenAI API key.")
-        except KeyError:
-            st.error("OpenAI API key not found in Streamlit's secrets.")
+    st.write("### Available Secret Keys:")
+    for key in st.secrets:
+        if isinstance(st.secrets[key], dict):
+            st.write(f"**{key}:** {list(st.secrets[key].keys())}")
+        else:
+            st.write(f"**{key}**")
     """
     # **End of Temporary Debugging Code**
 
