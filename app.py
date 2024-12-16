@@ -122,23 +122,12 @@ def plot_kpi_chart(kpi_name, data_points):
 def get_openai_api_key():
     """
     Retrieves the OpenAI API key from Streamlit secrets.
-    Supports both flat and nested secret structures.
     """
-    # Attempt to retrieve from flat structure
-    api_key = st.secrets.get("openai_api_key")
-    if api_key:
-        return api_key
-    
-    # Attempt to retrieve from nested structure
-    api_key = st.secrets.get("openai", {}).get("api_key")
-    if api_key:
-        return api_key
-    
-    # If key is not found in either structure, display an error and stop the app
-    st.error(
-        "OpenAI API key not found. Please set `openai_api_key` or `openai.api_key` in Streamlit's secrets."
-    )
-    st.stop()
+    try:
+        return st.secrets["Openai_API_key"]
+    except KeyError:
+        st.error("OpenAI API key not found. Please set `Openai_API_key` in Streamlit's secrets.")
+        st.stop()
 
 def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_description):
     """
@@ -507,7 +496,7 @@ def main():
                 st.markdown(f"- {target}")
             st.markdown(f"**Similar Companies’ Results:** {phase_info['Similar Companies’ Results']}")
             st.markdown(f"**Additional Creative Outputs:** {phase_info['Additional Creative Outputs']}")
-            
+
             # Display Risk Radar for POC phase
             if phase == "POC":
                 st.markdown(f"**Risk Radar:** {phase_info['Risk Radar']}")
