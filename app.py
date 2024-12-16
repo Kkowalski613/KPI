@@ -4,6 +4,8 @@ import plotly.express as px
 from fpdf import FPDF  # Ensure using fpdf2
 import numpy as np
 import json
+import openai
+import re
 
 # Define benchmark ranges for KPIs based on industry
 BENCHMARKS = {
@@ -358,57 +360,68 @@ def get_predefined_kpis(phase, survey_responses):
     
     return predefined_kpis.get(phase, [])
 
-# Revised Data Generation Function
-def generate_focused_fake_data(industry, product_audience, kpi_name):
+# Revised Data Generation Function with OpenAI
+def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_description):
     """
-    Generate fake data based on Industry, Product Audience, and KPI.
+    Generate fake data based on Industry, Product Audience, and KPI using OpenAI.
     Returns a pandas DataFrame with 'Time Period' and 'Value'.
     """
+    # Initialize OpenAI API key
+    openai.api_key = st.secrets["openai_api_key"]
+    
     # Define the number of time periods (e.g., months)
     time_periods = [f"Month {i}" for i in range(1, 13)]
     
-    # Initialize empty list for values
-    values = []
+    # Create a prompt for OpenAI to generate data
+    prompt = (
+        f"Generate a realistic set of monthly KPI values for the next 12 months based on the following details:\n\n"
+        f"Industry: {industry}\n"
+        f"Product Audience: {product_audience}\n"
+        f"KPI Name: {kpi_name}\n"
+        f"KPI Description: {kpi_description}\n\n"
+        f"Provide the data in a JSON format with 'Time Period' and 'Value' keys."
+    )
     
-    # Retrieve benchmarks based on industry
-    industry_benchmarks = BENCHMARKS.get(industry, BENCHMARKS["General"])
+    try:
+        # Call OpenAI API
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that generates realistic KPI data."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=300
+        )
+        
+        # Extract the generated JSON
+        generated_text = response.choices[0].message['content']
+        
+        # Attempt to parse the JSON
+        try:
+            generated_data = json.loads(generated_text)
+        except json.JSONDecodeError:
+            # If JSON is not properly formatted, extract JSON manually
+            json_match = re.search(r'\{.*\}', generated_text, re.DOTALL)
+            if json_match:
+                generated_data = json.loads(json_match.group(0))
+            else:
+                st.error("Failed to parse generated data from OpenAI.")
+                return pd.DataFrame()
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(generated_data)
+        
+        # Validate 'Time Period' and 'Value' columns
+        if not {'Time Period', 'Value'}.issubset(df.columns):
+            st.error("Generated data must contain 'Time Period' and 'Value' columns.")
+            return pd.DataFrame()
+        
+        return df
     
-    # Get benchmark data for the KPI
-    benchmark = industry_benchmarks.get(kpi_name, {"base": 1000, "growth": 1.0, "std_dev": 2})
-    base = benchmark["base"]
-    growth = benchmark["growth"]
-    std_dev = benchmark.get("std_dev", 2)
-    
-    # Generate data based on KPI type
-    if "score" in kpi_name.lower() or "rate" in kpi_name.lower() or "index" in kpi_name.lower():
-        for i in range(12):
-            value = base + (growth * i) + np.random.normal(0, std_dev)
-            # Handle percentage KPIs
-            if "score" in kpi_name.lower() or "rate" in kpi_name.lower() or "index" in kpi_name.lower():
-                value = max(min(value, 100), 0)  # Clamp between 0 and 100
-            values.append(round(value, 2))
-    else:
-        for i in range(12):
-            value = base * (growth ** i) + np.random.normal(0, std_dev)
-            values.append(int(value))
-    
-    data = {
-        "Time Period": time_periods,
-        "Value": values
-    }
-    
-    df = pd.DataFrame(data)
-    
-    # Validate 'Time Period' format
-    expected_periods = [f"Month {i}" for i in range(1, 13)]
-    if not all(period in expected_periods for period in df['Time Period']):
-        st.error("Error: 'Time Period' entries must be in the format 'Month 1' to 'Month 12'.")
-        return pd.DataFrame()  # Return empty DataFrame on error
-    
-    # Handle missing values
-    df['Value'] = df['Value'].fillna(0)
-    
-    return df
+    except Exception as e:
+        st.error(f"Error generating data with OpenAI: {e}")
+        return pd.DataFrame()
 
 # Survey Page
 def survey_page():
@@ -712,7 +725,7 @@ def main():
                         except Exception as e:
                             st.error(f"Error reading uploaded file: {e}")
 
-                # Generate Imaginary Data
+                # Generate Imaginary Data with OpenAI
                 elif data_option == "Generate Imaginary Data":
                     # Retrieve survey responses
                     survey = st.session_state.survey_responses
@@ -720,8 +733,13 @@ def main():
                     product_audience = survey.get("Product Audience", "General")
 
                     if st.button(f"Generate Data for '{kpi['name']}'", key=f"generate_{kpi['name']}"):
-                        with st.spinner("Generating data..."):
-                            df = generate_focused_fake_data(industry, product_audience, kpi['name'])
+                        with st.spinner("Generating data with OpenAI..."):
+                            df = generate_focused_fake_data(
+                                industry=industry,
+                                product_audience=product_audience,
+                                kpi_name=kpi['name'],
+                                kpi_description=kpi['description']
+                            )
                         if not df.empty:
                             st.session_state.kpi_data[kpi['name']] = df
                             st.success(f"Imaginary data generated successfully for '{kpi['name']}'")
