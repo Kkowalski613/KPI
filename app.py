@@ -90,43 +90,46 @@ def export_kpis_pdf(kpi_list):
     """Export KPIs as a PDF file using fpdf2 with UTF-8 support."""
     pdf = FPDF()
     
-    # Set margins (left, top, right)
-    pdf.set_margins(15, 15, 15)
-    pdf.set_auto_page_break(auto=True, margin=15)
+    # Set margins (left, top, right) to 10 mm for more horizontal space
+    pdf.set_margins(10, 10, 10)
+    pdf.set_auto_page_break(auto=True, margin=10)
     
     # Add the first page with the title
     pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
+    pdf.set_font("Arial", 'B', 14)  # Reduced font size for title
     pdf.cell(0, 10, "Selected KPIs", ln=True, align='C')
-    pdf.ln(10)
+    pdf.ln(5)
     
     # Add a new page for KPI details
     pdf.add_page()
-    pdf.set_font("Arial", size=12)
+    pdf.set_font("Arial", size=11)  # Reduced font size for content
     
     for kpi in kpi_list:
         # KPI Name
         pdf.set_font("Arial", 'B', 12)
-        pdf.multi_cell(0, 10, f"KPI: {kpi['name']}")
+        pdf.multi_cell(0, 8, f"KPI: {kpi['name']}", align='L')
         
         # KPI Description
-        pdf.set_font("Arial", '', 12)
+        pdf.set_font("Arial", '', 11)
         description = f"Description: {kpi['description']}"
         # Handle long unbroken strings
         if len(description.replace(" ", "")) > 100:
-            description = insert_spaces(description)
-        pdf.multi_cell(0, 10, description)
+            description = insert_spaces(description, max_length=100)
+        pdf.multi_cell(0, 8, description, align='L')
         
         # KPI Guidance
         guidance = f"Guidance: {kpi['guidance']}"
-        pdf.multi_cell(0, 10, guidance)
-        pdf.ln(5)  # Add space between KPIs
+        pdf.multi_cell(0, 8, guidance, align='L')
+        pdf.ln(3)  # Add space between KPIs
     
     try:
         # Generate PDF as bytes
         pdf_output = pdf.output(dest='S').encode('latin-1', 'replace')  # Handle non-latin1 chars
     except UnicodeEncodeError as e:
         st.error(f"Error encoding PDF: {e}")
+        return b""
+    except Exception as e:
+        st.error(f"An unexpected error occurred while generating PDF: {e}")
         return b""
     
     return pdf_output
@@ -632,188 +635,187 @@ def main():
             if phase == "POC":
                 st.markdown(f"**Risk Radar:** {phase_info['Risk Radar']}")
 
-            st.markdown("---")
+        st.markdown("---")
 
-            # Display Suggested KPIs and Explanations
-            if st.session_state.kpi_suggestions:
-                st.subheader("Suggested KPIs")
-                # Allow users to select KPIs
-                kpi_options = [f"{kpi['name']}: {kpi['description']}" for kpi in st.session_state.kpi_suggestions.get(phase, [])]
-                selected = st.multiselect(
-                    "Select KPIs you want to track:",
-                    options=kpi_options,
-                    key=f"kpi_multiselect_{phase}"
+        # Display Suggested KPIs and Explanations
+        if st.session_state.kpi_suggestions:
+            st.subheader("Suggested KPIs")
+            # Allow users to select KPIs
+            kpi_options = [f"{kpi['name']}: {kpi['description']}" for kpi in st.session_state.kpi_suggestions.get(phase, [])]
+            selected = st.multiselect(
+                "Select KPIs you want to track:",
+                options=kpi_options,
+                key=f"kpi_multiselect_{phase}"
+            )
+
+            # Map selected options back to KPI structures
+            selected_struct = []
+            for sel in selected:
+                kpi_name = sel.split(":")[0]
+                for kpi in st.session_state.kpi_suggestions.get(phase, []):
+                    if kpi['name'] == kpi_name:
+                        selected_struct.append(kpi)
+                        break
+
+            # Update session state with selected KPIs
+            st.session_state.selected_kpis_struct = selected_struct
+
+            # Save selected KPIs
+            if selected:
+                st.session_state.selected_kpis = selected
+                st.success("Selected KPIs have been saved to the tracker.")
+
+        st.markdown("---")
+
+        # KPI Builder Section
+        st.header("KPI Builder")
+        st.write("Based on your survey responses, the KPIs have been pre-defined for consistency. You can adjust or add new KPIs as needed.")
+
+        # KPI Tracker Section
+        st.header("KPI Tracker")
+        if not st.session_state.selected_kpis_struct:
+            st.info("No KPIs selected yet. Go to the 'Suggested KPIs' section above to select KPIs to track.")
+        else:
+            for idx, kpi in enumerate(st.session_state.selected_kpis_struct, 1):
+                st.markdown(f"### {idx}. {kpi['name']}")
+                st.write(f"**Description:** {kpi['description']}")
+                st.write(f"**Guidance:** {kpi['guidance']}")
+
+                # Data Management Options
+                data_option = st.radio(
+                    f"How would you like to manage data for '{kpi['name']}'?",
+                    ["Upload Data", "Generate Imaginary Data", "Manually Add Data"],
+                    key=f"data_option_{kpi['name']}"
                 )
 
-                # Map selected options back to KPI structures
-                selected_struct = []
-                for sel in selected:
-                    kpi_name = sel.split(":")[0]
-                    for kpi in st.session_state.kpi_suggestions.get(phase, []):
-                        if kpi['name'] == kpi_name:
-                            selected_struct.append(kpi)
-                            break
+                # Upload Data
+                if data_option == "Upload Data":
+                    uploaded_file = st.file_uploader(
+                        f"Upload data for '{kpi['name']}'",
+                        type=["csv", "xlsx"],
+                        key=f"upload_{kpi['name']}"
+                    )
+                    if uploaded_file:
+                        try:
+                            if uploaded_file.name.endswith(".csv"):
+                                df = pd.read_csv(uploaded_file)
+                            else:
+                                df = pd.read_excel(uploaded_file)
+                            # Validate required columns
+                            if set(['time_period', 'value']).issubset([col.lower() for col in df.columns]):
+                                df.columns = [col.lower() for col in df.columns]
+                                st.session_state.kpi_data[kpi['name']] = df.rename(columns={'value': 'Value'})
+                                st.success(f"Data uploaded successfully for '{kpi['name']}'")
+                                st.dataframe(df)
+                            else:
+                                st.error("Uploaded file must contain 'time_period' and 'value' columns.")
+                        except Exception as e:
+                            st.error(f"Error reading uploaded file: {e}")
 
-                # Update session state with selected KPIs
-                st.session_state.selected_kpis_struct = selected_struct
+                # Generate Imaginary Data
+                elif data_option == "Generate Imaginary Data":
+                    # Retrieve survey responses
+                    survey = st.session_state.survey_responses
+                    industry = survey.get("Industry", "General")
+                    product_audience = survey.get("Product Audience", "General")
 
-                # Save selected KPIs
-                if selected:
-                    st.session_state.selected_kpis = selected
-                    st.success("Selected KPIs have been saved to the tracker.")
-
-            # Tabs for Further Functionalities
-            tabs = st.tabs(["KPI Builder", "KPI Tracker", "KPI Explanations", "Export KPIs"])
-
-            # KPI Builder Tab
-            with tabs[0]:
-                st.header("KPI Builder")
-                st.write("Based on your survey responses, the KPIs have been pre-defined for consistency. You can adjust or add new KPIs as needed.")
-
-            # KPI Tracker Tab
-            with tabs[1]:
-                st.header("KPI Tracker")
-                if not st.session_state.selected_kpis_struct:
-                    st.info("No KPIs selected yet. Go to the 'Suggested KPIs' section above to select KPIs to track.")
-                else:
-                    for idx, kpi in enumerate(st.session_state.selected_kpis_struct, 1):
-                        st.markdown(f"### {idx}. {kpi['name']}")
-                        st.write(f"**Description:** {kpi['description']}")
-                        st.write(f"**Guidance:** {kpi['guidance']}")
-
-                        # Data Management Options
-                        data_option = st.radio(
-                            f"How would you like to manage data for '{kpi['name']}'?",
-                            ["Upload Data", "Generate Imaginary Data", "Manually Add Data"],
-                            key=f"data_option_{kpi['name']}"
-                        )
-
-                        # Upload Data
-                        if data_option == "Upload Data":
-                            uploaded_file = st.file_uploader(
-                                f"Upload data for '{kpi['name']}'",
-                                type=["csv", "xlsx"],
-                                key=f"upload_{kpi['name']}"
-                            )
-                            if uploaded_file:
-                                try:
-                                    if uploaded_file.name.endswith(".csv"):
-                                        df = pd.read_csv(uploaded_file)
-                                    else:
-                                        df = pd.read_excel(uploaded_file)
-                                    # Validate required columns
-                                    if set(['time_period', 'value']).issubset([col.lower() for col in df.columns]):
-                                        df.columns = [col.lower() for col in df.columns]
-                                        st.session_state.kpi_data[kpi['name']] = df.rename(columns={'value': 'Value'})
-                                        st.success(f"Data uploaded successfully for '{kpi['name']}'")
-                                        st.dataframe(df)
-                                    else:
-                                        st.error("Uploaded file must contain 'time_period' and 'value' columns.")
-                                except Exception as e:
-                                    st.error(f"Error reading uploaded file: {e}")
-
-                        # Generate Imaginary Data
-                        elif data_option == "Generate Imaginary Data":
-                            # Retrieve survey responses
-                            survey = st.session_state.survey_responses
-                            industry = survey.get("Industry", "General")
-                            product_audience = survey.get("Product Audience", "General")
-
-                            if st.button(f"Generate Data for '{kpi['name']}'", key=f"generate_{kpi['name']}"):
-                                with st.spinner("Generating data..."):
-                                    df = generate_focused_fake_data(industry, product_audience, kpi['name'])
-                                if not df.empty:
-                                    st.session_state.kpi_data[kpi['name']] = df
-                                    st.success(f"Imaginary data generated successfully for '{kpi['name']}'")
-                                    st.dataframe(df)
-
-                        # Manually Add Data
-                        elif data_option == "Manually Add Data":
-                            with st.expander(f"Add Data for {kpi['name']}"):
-                                time_period = st.text_input(f"Time Period for {kpi['name']} (e.g., Q1 2024)", key=f"time_{kpi['name']}")
-                                value = st.number_input(f"Value for {kpi['name']}", key=f"value_{kpi['name']}")
-                                if st.button(f"Add Data Point for '{kpi['name']}'", key=f"add_{kpi['name']}"):
-                                    if time_period and value is not None:
-                                        new_data = pd.DataFrame({"Time Period": [time_period], "Value": [value]})
-                                        if kpi['name'] in st.session_state.kpi_data:
-                                            st.session_state.kpi_data[kpi['name']] = pd.concat(
-                                                [st.session_state.kpi_data[kpi['name']], new_data],
-                                                ignore_index=True
-                                            )
-                                        else:
-                                            st.session_state.kpi_data[kpi['name']] = new_data
-                                        st.success(f"Data point added for '{kpi['name']}'")
-                                    else:
-                                        st.error("Please provide both Time Period and Value.")
-
-                        # Display Data and Plot
-                        if kpi['name'] in st.session_state.kpi_data:
-                            df = st.session_state.kpi_data[kpi['name']]
-                            st.write(f"### Data for '{kpi['name']}'")
+                    if st.button(f"Generate Data for '{kpi['name']}'", key=f"generate_{kpi['name']}"):
+                        with st.spinner("Generating data..."):
+                            df = generate_focused_fake_data(industry, product_audience, kpi['name'])
+                        if not df.empty:
+                            st.session_state.kpi_data[kpi['name']] = df
+                            st.success(f"Imaginary data generated successfully for '{kpi['name']}'")
                             st.dataframe(df)
-                            # Plotting with Plotly
-                            fig = plot_kpi_chart(kpi['name'], df)
-                            st.plotly_chart(fig, use_container_width=True)
 
-            # KPI Explanations Tab
-            with tabs[2]:
-                st.header("KPI Explanations")
+                # Manually Add Data
+                elif data_option == "Manually Add Data":
+                    with st.expander(f"Add Data for {kpi['name']}"):
+                        time_period = st.text_input(f"Time Period for {kpi['name']} (e.g., Q1 2024)", key=f"time_{kpi['name']}")
+                        value = st.number_input(f"Value for {kpi['name']}", key=f"value_{kpi['name']}")
+                        if st.button(f"Add Data Point for '{kpi['name']}'", key=f"add_{kpi['name']}"):
+                            if time_period and value is not None:
+                                new_data = pd.DataFrame({"Time Period": [time_period], "Value": [value]})
+                                if kpi['name'] in st.session_state.kpi_data:
+                                    st.session_state.kpi_data[kpi['name']] = pd.concat(
+                                        [st.session_state.kpi_data[kpi['name']], new_data],
+                                        ignore_index=True
+                                    )
+                                else:
+                                    st.session_state.kpi_data[kpi['name']] = new_data
+                                st.success(f"Data point added for '{kpi['name']}'")
+                            else:
+                                st.error("Please provide both Time Period and Value.")
 
-                if not st.session_state.get("selected_kpis_struct"):
-                    st.info("No KPIs selected yet. Go to the 'Suggested KPIs' section above to select KPIs to track.")
-                else:
-                    # Generate explanations if not already done
-                    if not st.session_state.get("kpi_explanations"):
-                        explanations = explain_kpis(st.session_state.selected_kpis_struct)
-                        st.session_state.kpi_explanations = explanations
+                # Display Data and Plot
+                if kpi['name'] in st.session_state.kpi_data:
+                    df = st.session_state.kpi_data[kpi['name']]
+                    st.write(f"### Data for '{kpi['name']}'")
+                    st.dataframe(df)
+                    # Plotting with Plotly
+                    fig = plot_kpi_chart(kpi['name'], df)
+                    st.plotly_chart(fig, use_container_width=True)
 
-                    # Display explanations
-                    for kpi_name, explanation in st.session_state.kpi_explanations.items():
-                        st.markdown(f"### {kpi_name}")
-                        st.write(explanation)
+        st.markdown("---")
 
-            # Export KPIs Tab
-            with tabs[3]:
-                st.header("Export KPIs")
-                if not st.session_state.selected_kpis_struct:
-                    st.info("No KPIs selected yet. Go to the 'Suggested KPIs' section above to select KPIs to track.")
-                else:
-                    st.subheader("Download KPIs")
-                    kpi_list = st.session_state.selected_kpis_struct
-                    # Export options
-                    csv = export_kpis_csv(kpi_list)
-                    json_data = export_kpis_json(kpi_list)
-                    text = export_kpis_text(kpi_list)
-                    pdf = export_kpis_pdf(kpi_list)
+        # KPI Explanations Section
+        st.header("KPI Explanations")
 
-                    if csv:
-                        st.download_button(
-                            label="Download KPIs as CSV",
-                            data=csv,
-                            file_name="kpis.csv",
-                            mime="text/csv"
-                        )
-                    if json_data:
-                        st.download_button(
-                            label="Download KPIs as JSON",
-                            data=json_data,
-                            file_name="kpis.json",
-                            mime="application/json"
-                        )
-                    if text:
-                        st.download_button(
-                            label="Download KPIs as Text",
-                            data=text,
-                            file_name="kpis.txt",
-                            mime="text/plain"
-                        )
-                    if pdf:
-                        st.download_button(
-                            label="Download KPIs as PDF",
-                            data=pdf,
-                            file_name="kpis.pdf",
-                            mime="application/pdf"
-                        )
+        if not st.session_state.get("selected_kpis_struct"):
+            st.info("No KPIs selected yet. Go to the 'Suggested KPIs' section above to select KPIs to track.")
+        else:
+            # Generate explanations if not already done
+            if not st.session_state.get("kpi_explanations"):
+                explanations = explain_kpis(st.session_state.selected_kpis_struct)
+                st.session_state.kpi_explanations = explanations
+
+            # Display explanations
+            for kpi_name, explanation in st.session_state.kpi_explanations.items():
+                st.markdown(f"### {kpi_name}")
+                st.write(explanation)
+
+        st.markdown("---")
+
+        # Export KPIs Section
+        st.header("Export KPIs")
+        if not st.session_state.selected_kpis_struct:
+            st.info("No KPIs selected yet. Go to the 'Suggested KPIs' section above to select KPIs to track.")
+        else:
+            st.subheader("Download KPIs")
+            kpi_list = st.session_state.selected_kpis_struct
+            # Export options
+            csv = export_kpis_csv(kpi_list)
+            json_data = export_kpis_json(kpi_list)
+            text = export_kpis_text(kpi_list)
+            pdf = export_kpis_pdf(kpi_list)
+
+            if csv:
+                st.download_button(
+                    label="Download KPIs as CSV",
+                    data=csv,
+                    file_name="kpis.csv",
+                    mime="text/csv"
+                )
+            if json_data:
+                st.download_button(
+                    label="Download KPIs as JSON",
+                    data=json_data,
+                    file_name="kpis.json",
+                    mime="application/json"
+                )
+            if text:
+                st.download_button(
+                    label="Download KPIs as Text",
+                    data=text,
+                    file_name="kpis.txt",
+                    mime="text/plain"
+                )
+            if pdf:
+                st.download_button(
+                    label="Download KPIs as PDF",
+                    data=pdf,
+                    file_name="kpis.pdf",
+                    mime="application/pdf"
+                )
 
 if __name__ == "__main__":
     main()
