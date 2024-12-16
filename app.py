@@ -13,13 +13,13 @@ from jsonschema import validate
 BENCHMARKS = {
     "Real Estate": {
         "User Engagement": {"base": 60, "growth": 5, "std_dev": 5},
-        "Home Clicks": {"base": 1000, "growth": 200, "std_dev": 100},
+        "Homepage Clicks": {"base": 1000, "growth": 200, "std_dev": 100},
         "Accounts Activated": {"base": 500, "growth": 50, "std_dev": 30},
         "Subscriptions Renewed": {"base": 400, "growth": 40, "std_dev": 25}
     },
     "General": {
         "User Engagement": {"base": 50, "growth": 4, "std_dev": 4},
-        "Home Clicks": {"base": 800, "growth": 150, "std_dev": 80},
+        "Homepage Clicks": {"base": 800, "growth": 150, "std_dev": 80},
         "Accounts Activated": {"base": 400, "growth": 40, "std_dev": 25},
         "Subscriptions Renewed": {"base": 300, "growth": 30, "std_dev": 20}
     }
@@ -269,8 +269,8 @@ def get_predefined_kpis(phase, survey_responses):
                 "guidance": "Aim for ≥ 60% engagement rate."
             },
             {
-                "name": "Home Clicks",
-                "description": "Tracks the number of clicks on home listings within the platform.",
+                "name": "Homepage Clicks",
+                "description": "Tracks the number of clicks on homepage listings within the platform.",
                 "guidance": "Aim for ≥ 1000 clicks per month."
             },
             {
@@ -291,8 +291,8 @@ def get_predefined_kpis(phase, survey_responses):
                 "guidance": "Aim for ≥ 400 renewals."
             },
             {
-                "name": "Home Clicks",
-                "description": "Monitors the engagement with home listings within the platform.",
+                "name": "Homepage Clicks",
+                "description": "Monitors the engagement with homepage links within the platform.",
                 "guidance": "Aim for ≥ 1200 clicks per month."
             }
         ],
