@@ -4,6 +4,8 @@ import plotly.express as px
 import json
 import openai
 import re
+import jsonschema
+from jsonschema import validate
 
 # -------------------- Configuration --------------------
 
@@ -31,6 +33,8 @@ st.session_state.selected_kpis = st.session_state.get("selected_kpis", [])
 st.session_state.kpi_data = st.session_state.get("kpi_data", {})
 st.session_state.kpi_explanations = st.session_state.get("kpi_explanations", {})
 st.session_state.phase_outputs = st.session_state.get("phase_outputs", {})
+st.session_state.selected_kpis_struct = st.session_state.get("selected_kpis_struct", {})
+st.session_state.survey_responses = st.session_state.get("survey_responses", {})
 
 # -------------------- Export Functions --------------------
 
@@ -141,15 +145,44 @@ def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_descrip
     # Define the number of time periods (e.g., months)
     time_periods = [f"Month {i}" for i in range(1, 13)]
     
-    # Create a prompt for OpenAI to generate data
+    # Create a refined prompt for OpenAI to generate data
     prompt = (
         f"Generate a realistic set of monthly KPI values for the next 12 months based on the following details:\n\n"
         f"Industry: {industry}\n"
         f"Product Audience: {product_audience}\n"
         f"KPI Name: {kpi_name}\n"
         f"KPI Description: {kpi_description}\n\n"
-        f"Provide the data in a JSON format with 'Time Period' and 'Value' keys."
+        f"Provide ONLY the data in a JSON format with 'Time Period' and 'Value' keys, enclosed within a JSON code block.\n\n"
+        f"```json\n"
+        f"[\n"
+        f"    {{\"Time Period\": \"Month 1\", \"Value\": 100}},\n"
+        f"    {{\"Time Period\": \"Month 2\", \"Value\": 105}},\n"
+        f"    {{\"Time Period\": \"Month 3\", \"Value\": 110}},\n"
+        f"    {{\"Time Period\": \"Month 4\", \"Value\": 115}},\n"
+        f"    {{\"Time Period\": \"Month 5\", \"Value\": 120}},\n"
+        f"    {{\"Time Period\": \"Month 6\", \"Value\": 125}},\n"
+        f"    {{\"Time Period\": \"Month 7\", \"Value\": 130}},\n"
+        f"    {{\"Time Period\": \"Month 8\", \"Value\": 135}},\n"
+        f"    {{\"Time Period\": \"Month 9\", \"Value\": 140}},\n"
+        f"    {{\"Time Period\": \"Month 10\", \"Value\": 145}},\n"
+        f"    {{\"Time Period\": \"Month 11\", \"Value\": 150}},\n"
+        f"    {{\"Time Period\": \"Month 12\", \"Value\": 155}}\n"
+        f"]\n"
+        f"```"
     )
+    
+    # Define the JSON schema for validation
+    kpi_schema = {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "Time Period": {"type": "string"},
+                "Value": {"type": "number"}
+            },
+            "required": ["Time Period", "Value"]
+        }
+    }
     
     try:
         # Call OpenAI API
@@ -166,25 +199,34 @@ def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_descrip
         # Extract the generated JSON
         generated_text = response.choices[0].message['content']
         
-        # Attempt to parse the JSON
-        try:
-            generated_data = json.loads(generated_text)
-        except json.JSONDecodeError:
-            # If JSON is not properly formatted, extract JSON manually
-            json_match = re.search(r'\{.*\}', generated_text, re.DOTALL)
-            if json_match:
-                generated_data = json.loads(json_match.group(0))
-            else:
-                st.error("Failed to parse generated data from OpenAI.")
+        # Attempt to extract JSON data from the response
+        json_match = re.search(r"```json\s*([\s\S]*?)\s*```", generated_text)
+        if json_match:
+            json_str = json_match.group(1)
+            try:
+                generated_data = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                st.error(f"Failed to parse JSON data from OpenAI response: {e}")
+                st.text("Generated Text:")
+                st.text(generated_text)  # For debugging purposes
                 return pd.DataFrame()
+        else:
+            st.error("No JSON code block found in OpenAI response.")
+            st.text("Generated Text:")
+            st.text(generated_text)  # For debugging purposes
+            return pd.DataFrame()
+        
+        # Validate the JSON data against the schema
+        try:
+            validate(instance=generated_data, schema=kpi_schema)
+        except jsonschema.exceptions.ValidationError as ve:
+            st.error(f"JSON data does not match the expected schema: {ve.message}")
+            st.text("Generated Data:")
+            st.text(json.dumps(generated_data, indent=4))  # Display the incorrect data for debugging
+            return pd.DataFrame()
         
         # Convert to DataFrame
         df = pd.DataFrame(generated_data)
-        
-        # Validate 'Time Period' and 'Value' columns
-        if not {'Time Period', 'Value'}.issubset(df.columns):
-            st.error("Generated data must contain 'Time Period' and 'Value' columns.")
-            return pd.DataFrame()
         
         return df
     
@@ -496,7 +538,7 @@ def main():
                 st.markdown(f"- {target}")
             st.markdown(f"**Similar Companies’ Results:** {phase_info['Similar Companies’ Results']}")
             st.markdown(f"**Additional Creative Outputs:** {phase_info['Additional Creative Outputs']}")
-
+        
             # Display Risk Radar for POC phase
             if phase == "POC":
                 st.markdown(f"**Risk Radar:** {phase_info['Risk Radar']}")
