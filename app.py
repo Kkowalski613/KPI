@@ -119,14 +119,14 @@ def plot_kpi_chart(kpi_name, data_points):
 
 # -------------------- OpenAI Data Generation --------------------
 
-def get_openai_api_key():
+def get_OPENAI_API_KEY():
     """
     Retrieves the OpenAI API key from Streamlit secrets.
     """
     try:
-        return st.secrets["Openai_API_key"]
+        return st.secrets["OPENAI_API_KEY"]
     except KeyError:
-        st.error("OpenAI API key not found. Please set `Openai_API_key` in Streamlit's secrets.")
+        st.error("OpenAI API key not found. Please set `OPENAI_API_KEY` in Streamlit's secrets.")
         st.stop()
 
 def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_description):
@@ -135,8 +135,8 @@ def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_descrip
     Returns a pandas DataFrame with 'Time Period' and 'Value'.
     """
     # Initialize OpenAI API key
-    openai_api_key = get_openai_api_key()
-    openai.api_key = openai_api_key
+    OPENAI_API_KEY = get_OPENAI_API_KEY()
+    openai.api_key = OPENAI_API_KEY
     
     # Define the number of time periods (e.g., months)
     time_periods = [f"Month {i}" for i in range(1, 13)]
