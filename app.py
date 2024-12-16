@@ -1,50 +1,27 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from fpdf import FPDF  # Ensure using fpdf2
 import numpy as np
 import json
 import openai
 import re
 
+# -------------------- Configuration --------------------
+
 # Define benchmark ranges for KPIs based on industry
 BENCHMARKS = {
-    "Technology": {
-        "User Engagement Score": {"base": 65, "growth": 1.5, "std_dev": 2},
-        "Feedback Implementation Rate": {"base": 70, "growth": 1.2, "std_dev": 1},
-        "Bug Fix Rate": {"base": 85, "growth": 1.0, "std_dev": 1},
-        "Net Promoter Score (NPS)": {"base": 40, "growth": 2.0, "std_dev": 5},
-        "Zillow Home Click Rate": {"base": 600, "growth": 30, "std_dev": 20},
-        "Adoption Rate": {"base": 25, "growth": 0.5, "std_dev": 0.3},
-        "Customer Satisfaction Score (CSAT)": {"base": 4.0, "growth": 0.05, "std_dev": 0.1},
-        "Retention Rate": {"base": 50, "growth": 1.0, "std_dev": 2},
-        "Churn Rate": {"base": 5.0, "growth": 0.1, "std_dev": 0.3},
-        "Conversion Rate": {"base": 3.0, "growth": 0.05, "std_dev": 0.1}
-    },
-    "Healthcare": {
-        "User Engagement Score": {"base": 55, "growth": 1.3, "std_dev": 2},
-        "Feedback Implementation Rate": {"base": 75, "growth": 1.1, "std_dev": 1},
-        "Bug Fix Rate": {"base": 90, "growth": 0.8, "std_dev": 1},
-        "Net Promoter Score (NPS)": {"base": 35, "growth": 1.8, "std_dev": 5},
-        "Zillow Home Click Rate": {"base": 500, "growth": 25, "std_dev": 20},
-        "Adoption Rate": {"base": 20, "growth": 0.5, "std_dev": 0.3},
-        "Customer Satisfaction Score (CSAT)": {"base": 3.5, "growth": 0.05, "std_dev": 0.1},
-        "Retention Rate": {"base": 45, "growth": 1.0, "std_dev": 2},
-        "Churn Rate": {"base": 6.0, "growth": 0.1, "std_dev": 0.3},
-        "Conversion Rate": {"base": 2.5, "growth": 0.05, "std_dev": 0.1}
+    "Real Estate": {
+        "User Engagement": {"base": 60, "growth": 5, "std_dev": 5},
+        "Home Clicks": {"base": 1000, "growth": 200, "std_dev": 100},
+        "Accounts Activated": {"base": 500, "growth": 50, "std_dev": 30},
+        "Subscriptions Renewed": {"base": 400, "growth": 40, "std_dev": 25}
     },
     # Add other industries similarly
     "General": {
-        "User Engagement Score": {"base": 60, "growth": 1.0, "std_dev": 2},
-        "Feedback Implementation Rate": {"base": 70, "growth": 1.0, "std_dev": 1},
-        "Bug Fix Rate": {"base": 85, "growth": 1.0, "std_dev": 1},
-        "Net Promoter Score (NPS)": {"base": 40, "growth": 1.5, "std_dev": 5},
-        "Zillow Home Click Rate": {"base": 550, "growth": 27, "std_dev": 20},
-        "Adoption Rate": {"base": 25, "growth": 0.5, "std_dev": 0.3},
-        "Customer Satisfaction Score (CSAT)": {"base": 4.0, "growth": 0.05, "std_dev": 0.1},
-        "Retention Rate": {"base": 50, "growth": 1.0, "std_dev": 2},
-        "Churn Rate": {"base": 5.0, "growth": 0.1, "std_dev": 0.3},
-        "Conversion Rate": {"base": 3.0, "growth": 0.05, "std_dev": 0.1}
+        "User Engagement": {"base": 50, "growth": 4, "std_dev": 4},
+        "Home Clicks": {"base": 800, "growth": 150, "std_dev": 80},
+        "Accounts Activated": {"base": 400, "growth": 40, "std_dev": 25},
+        "Subscriptions Renewed": {"base": 300, "growth": 30, "std_dev": 20}
     }
 }
 
@@ -57,13 +34,7 @@ st.session_state.kpi_data = st.session_state.get("kpi_data", {})
 st.session_state.kpi_explanations = st.session_state.get("kpi_explanations", {})
 st.session_state.phase_outputs = st.session_state.get("phase_outputs", {})
 
-# Export Functions
-def insert_spaces(text, max_length=100):
-    """
-    Insert spaces into a long string to prevent FPDF from failing.
-    Splits the text every max_length characters.
-    """
-    return ' '.join([text[i:i+max_length] for i in range(0, len(text), max_length)])
+# -------------------- Export Functions --------------------
 
 def export_kpis_csv(kpi_list):
     """Export KPIs as a CSV file."""
@@ -88,131 +59,37 @@ def export_kpis_text(kpi_list):
         text_lines.append(f"Guidance: {kpi['guidance']}\n")
     return "\n".join(text_lines).encode('utf-8')
 
-def export_kpis_pdf(kpi_list):
-    """Export KPIs as a PDF file using fpdf2 with UTF-8 support."""
-    pdf = FPDF()
-    
-    # Set margins (left, top, right) to 10 mm for more horizontal space
-    pdf.set_margins(10, 10, 10)
-    pdf.set_auto_page_break(auto=True, margin=10)
-    
-    # Add the first page with the title
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 14)  # Reduced font size for title
-    pdf.cell(0, 10, "Selected KPIs", ln=True, align='C')
-    pdf.ln(5)
-    
-    # Add a new page for KPI details
-    pdf.add_page()
-    pdf.set_font("Arial", size=11)  # Reduced font size for content
-    
-    for kpi in kpi_list:
-        # KPI Name
-        pdf.set_font("Arial", 'B', 12)
-        pdf.multi_cell(0, 8, f"KPI: {kpi['name']}", align='L')
-        
-        # KPI Description
-        pdf.set_font("Arial", '', 11)
-        description = f"Description: {kpi['description']}"
-        # Handle long unbroken strings
-        if len(description.replace(" ", "")) > 100:
-            description = insert_spaces(description, max_length=100)
-        pdf.multi_cell(0, 8, description, align='L')
-        
-        # KPI Guidance
-        guidance = f"Guidance: {kpi['guidance']}"
-        pdf.multi_cell(0, 8, guidance, align='L')
-        pdf.ln(3)  # Add space between KPIs
-    
-    try:
-        # Generate PDF as bytes
-        pdf_output = pdf.output(dest='S').encode('latin-1', 'replace')  # Handle non-latin1 chars
-    except UnicodeEncodeError as e:
-        st.error(f"Error encoding PDF: {e}")
-        return b""
-    except Exception as e:
-        st.error(f"An unexpected error occurred while generating PDF: {e}")
-        return b""
-    
-    return pdf_output
+# -------------------- Plotting Function --------------------
 
-# Revised Plotting Function
 def plot_kpi_chart(kpi_name, data_points):
     """Generate an interactive and enhanced trend chart for a specific KPI using Plotly."""
     # Ensure 'Time Period' is sorted
     data_points = data_points.sort_values('Time Period')
 
-    # Calculate a 3-month moving average
-    data_points['Moving Average'] = data_points['Value'].rolling(window=3, min_periods=1).mean()
-    
-    # Create the primary line chart with markers
+    # Calculate scenarios
+    scenarios = {
+        "Weak": data_points['Value'] * 0.8,
+        "Medium": data_points['Value'],
+        "High": data_points['Value'] * 1.2
+    }
+
+    # Create DataFrame for scenarios
+    scenario_df = pd.DataFrame(scenarios, index=data_points['Time Period'])
+
+    # Melt the DataFrame for Plotly
+    melted_df = scenario_df.reset_index().melt(id_vars='Time Period', var_name='Scenario', value_name='Value')
+
+    # Create the line chart
     fig = px.line(
-        data_points,
+        melted_df,
         x='Time Period',
         y='Value',
-        title=f"KPI: {kpi_name}",
+        color='Scenario',
+        title=f"KPI: {kpi_name} - Scenarios",
         markers=True,
         labels={"Value": kpi_name}
     )
-    
-    # Generate the moving average line as a separate figure
-    moving_avg_fig = px.line(
-        data_points,
-        x='Time Period',
-        y='Moving Average',
-        markers=False,
-        labels={"Moving Average": "3-Month Moving Avg"}
-    )
-    
-    # Modify the moving average trace's line properties
-    for trace in moving_avg_fig.data:
-        trace.update(line=dict(dash='dash', color='orange'))
-    
-    # Add the moving average trace to the primary figure
-    fig.add_traces(moving_avg_fig.data)
-    
-    # Optional: Add annotations (e.g., Mid-year Review)
-    if 'Month 6' in data_points['Time Period'].values:
-        month6_value = data_points[data_points['Time Period'] == 'Month 6']['Value'].values[0]
-        fig.add_annotation(
-            x='Month 6',
-            y=month6_value,
-            text="Mid-year Review",
-            showarrow=True,
-            arrowhead=1,
-            bgcolor="yellow",
-            opacity=0.7
-        )
-    
-    # Add shapes (e.g., threshold line)
-    threshold = 1500  # Example threshold value; adjust based on KPI
-    fig.add_shape(
-        dict(
-            type="line",
-            x0="Month 1",
-            y0=threshold,
-            x1="Month 12",
-            y1=threshold,
-            line=dict(
-                color="Red",
-                width=2,
-                dash="dash",
-            ),
-        )
-    )
-    fig.add_annotation(
-        x="Month 12",
-        y=threshold,
-        xref="x",
-        yref="y",
-        text="Target Threshold",
-        showarrow=False,
-        yanchor="bottom",
-        bgcolor="red",
-        opacity=0.7,
-        font=dict(color="white")
-    )
-    
+
     # Update layout for better aesthetics
     fig.update_layout(
         xaxis_title="Time Period",
@@ -227,140 +104,23 @@ def plot_kpi_chart(kpi_name, data_points):
         ),
         margin=dict(l=40, r=40, t=60, b=40)
     )
-    
+
     # Update hover template for clarity
     fig.update_traces(
         hovertemplate="<b>%{x}</b><br>%{y}"
     )
-    
+
     # Customize the layout for better spacing and readability
     fig.update_layout(
         autosize=True,
         width=800,
         height=600
     )
-    
+
     return fig
 
-# Function to explain KPIs
-def explain_kpis(kpi_list):
-    """
-    Generates explanations for each KPI. This function can be customized or expanded.
-    For now, it returns a placeholder explanation.
-    """
-    explanations = {}
-    for kpi in kpi_list:
-        explanations[kpi['name']] = f"{kpi['description']} ({kpi['guidance']})"
-    return explanations
+# -------------------- OpenAI Data Generation --------------------
 
-# Revised Pre-Defined KPIs per Phase
-def get_predefined_kpis(phase, survey_responses):
-    """
-    Returns a list of KPIs based on the phase and survey responses.
-    Adjust KPIs as needed based on industry and product audience.
-    """
-    industry = survey_responses.get("Industry", "General")
-    product_audience = survey_responses.get("Product Audience", "General")
-    
-    # Example KPI templates; expand as needed
-    predefined_kpis = {
-        "POC": [
-            {
-                "name": "Concept Validation Rate",
-                "description": "Percentage of key features or concepts validated through initial testing or stakeholder feedback.",
-                "guidance": "Aim for ≥ 80% validation rate."
-            },
-            {
-                "name": "Stakeholder Satisfaction Score",
-                "description": "Average satisfaction rating from stakeholders involved in the POC.",
-                "guidance": "Aim for ≥ 4 out of 5."
-            },
-            {
-                "name": "Technical Feasibility Index",
-                "description": "Percentage of technical requirements met without major issues.",
-                "guidance": "Aim for ≥ 90% feasibility."
-            },
-            {
-                "name": "Resource Utilization Efficiency",
-                "description": "Ratio of actual resource usage to planned resource allocation.",
-                "guidance": "Aim for ≥ 95% efficiency."
-            },
-            {
-                "name": "POC Completion Rate",
-                "description": "Percentage of POC milestones achieved within the planned timeframe.",
-                "guidance": "Aim for ≥ 100% completion."
-            }
-        ],
-        "Closed Beta": [
-            {
-                "name": "User Engagement Score",
-                "description": "Measures active user interactions, such as daily/monthly active users.",
-                "guidance": "Aim for ≥ 60% active user rate."
-            },
-            {
-                "name": "Feedback Implementation Rate",
-                "description": "Percentage of user feedback items that are addressed and implemented.",
-                "guidance": "Aim for ≥ 75% implementation."
-            },
-            {
-                "name": "Bug Fix Rate",
-                "description": "Percentage of reported bugs resolved within the beta period.",
-                "guidance": "Aim for ≥ 90% fix rate."
-            },
-            {
-                "name": "Net Promoter Score (NPS)",
-                "description": "Measures user willingness to recommend the product to others.",
-                "guidance": "Aim for ≥ 50 NPS."
-            },
-            {
-                "name": "Zillow Home Click Rate",
-                "description": "Tracks the number of clicks on Zillow home listings within the app.",
-                "guidance": "Aim for ≥ 500 clicks per month."
-            }
-        ],
-        "Public MVP": [
-            {
-                "name": "Adoption Rate",
-                "description": "Percentage of target users who adopt the MVP within a specific timeframe.",
-                "guidance": "Aim for ≥ 25% within the first quarter."
-            },
-            {
-                "name": "Customer Satisfaction Score (CSAT)",
-                "description": "Average satisfaction rating from users post-interaction or usage.",
-                "guidance": "Aim for ≥ 4 out of 5."
-            },
-            {
-                "name": "Retention Rate",
-                "description": "Percentage of users who continue using the MVP over a set period.",
-                "guidance": "Aim for ≥ 50% after six months."
-            },
-            {
-                "name": "Churn Rate",
-                "description": "Percentage of users who stop using the MVP within a specific period.",
-                "guidance": "Aim for ≤ 5% per month."
-            },
-            {
-                "name": "Conversion Rate",
-                "description": "Percentage of users who take a desired action (e.g., sign-up, purchase).",
-                "guidance": "Aim for ≥ 3%."
-            }
-        ]
-    }
-    
-    # Customize KPIs based on Industry and Product Audience
-    # Example: If B2B2C and Digital App, adjust descriptions or add specific KPIs
-    if (phase == "Closed Beta" and 
-        product_audience == "B2B2C (Business-to-Business-to-Consumer)" and 
-        "digital app" in survey_responses.get("Offering Type", "").lower()):
-        predefined_kpis["Closed Beta"].append({
-            "name": "Zillow Home Click Rate",
-            "description": "Tracks the number of clicks on Zillow home listings within the app.",
-            "guidance": "Aim for ≥ 500 clicks per month."
-        })
-    
-    return predefined_kpis.get(phase, [])
-
-# Revised Data Generation Function with OpenAI
 def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_description):
     """
     Generate fake data based on Industry, Product Audience, and KPI using OpenAI.
@@ -423,7 +183,85 @@ def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_descrip
         st.error(f"Error generating data with OpenAI: {e}")
         return pd.DataFrame()
 
-# Survey Page
+# -------------------- KPI Explanation Function --------------------
+
+def explain_kpis(kpi_list):
+    """
+    Generates explanations for each KPI.
+    """
+    explanations = {}
+    for kpi in kpi_list:
+        explanations[kpi['name']] = f"{kpi['description']} ({kpi['guidance']})"
+    return explanations
+
+# -------------------- Pre-Defined KPIs per Phase --------------------
+
+def get_predefined_kpis(phase, survey_responses):
+    """
+    Returns a list of KPIs based on the phase and survey responses.
+    """
+    industry = survey_responses.get("Industry", "General")
+    product_audience = survey_responses.get("Product Audience", "General")
+    
+    # Example KPI templates; expand as needed
+    predefined_kpis = {
+        "POC": [
+            {
+                "name": "User Engagement",
+                "description": "Measures the level of user interaction with the product during the POC phase.",
+                "guidance": "Aim for ≥ 60% engagement rate."
+            },
+            {
+                "name": "Home Clicks",
+                "description": "Tracks the number of clicks on home listings within the platform.",
+                "guidance": "Aim for ≥ 1000 clicks per month."
+            },
+            {
+                "name": "Accounts Activated",
+                "description": "Number of new user accounts activated during the POC phase.",
+                "guidance": "Aim for ≥ 500 activations."
+            }
+        ],
+        "Closed Beta": [
+            {
+                "name": "User Engagement",
+                "description": "Measures the continued interaction of users with the product during the Closed Beta phase.",
+                "guidance": "Aim for ≥ 70% engagement rate."
+            },
+            {
+                "name": "Subscriptions Renewed",
+                "description": "Tracks the number of user subscriptions that are renewed during the beta period.",
+                "guidance": "Aim for ≥ 400 renewals."
+            },
+            {
+                "name": "Home Clicks",
+                "description": "Monitors the engagement with home listings within the platform.",
+                "guidance": "Aim for ≥ 1200 clicks per month."
+            }
+        ],
+        "Public MVP": [
+            {
+                "name": "User Engagement",
+                "description": "Assessing user interaction and activity levels post-launch of the MVP.",
+                "guidance": "Aim for ≥ 80% engagement rate."
+            },
+            {
+                "name": "Subscriptions Renewed",
+                "description": "Measures the retention of user subscriptions over time.",
+                "guidance": "Aim for ≥ 500 renewals."
+            },
+            {
+                "name": "Accounts Activated",
+                "description": "Number of new user accounts activated after MVP launch.",
+                "guidance": "Aim for ≥ 600 activations."
+            }
+        ]
+    }
+    
+    return predefined_kpis.get(phase, [])
+
+# -------------------- Survey Page --------------------
+
 def survey_page():
     st.title("KPI Creation and Tracking Kit - Survey")
 
@@ -435,7 +273,7 @@ def survey_page():
         # Question 1
         st.markdown("### **1. What industry are you in?**")
         industry = st.selectbox("", [
-            "Manufacturing",
+            "Real Estate",
             "Retail",
             "Technology",
             "Healthcare",
@@ -614,7 +452,8 @@ def survey_page():
             st.session_state.kpi_explanations = explain_kpis(all_kpis)
             st.success("Phase outputs generated successfully! You can now access the KPI tools.")
 
-# Main App Logic
+# -------------------- Main App Logic --------------------
+
 def main():
     st.set_page_config(page_title="KPI Creation and Tracking Kit", layout="wide")
 
@@ -804,7 +643,6 @@ def main():
             csv = export_kpis_csv(kpi_list)
             json_data = export_kpis_json(kpi_list)
             text = export_kpis_text(kpi_list)
-            pdf = export_kpis_pdf(kpi_list)
 
             if csv:
                 st.download_button(
@@ -827,13 +665,8 @@ def main():
                     file_name="kpis.txt",
                     mime="text/plain"
                 )
-            if pdf:
-                st.download_button(
-                    label="Download KPIs as PDF",
-                    data=pdf,
-                    file_name="kpis.pdf",
-                    mime="application/pdf"
-                )
+
+# -------------------- Run the App --------------------
 
 if __name__ == "__main__":
     main()
