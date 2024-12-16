@@ -65,9 +65,27 @@ def export_kpis_text(kpi_list):
 
 def plot_kpi_chart(kpi_name, data_points):
     """Generate an interactive and enhanced trend chart for a specific KPI using Plotly."""
-    # Ensure 'Time Period' is sorted
-    data_points = data_points.sort_values('Time Period')
+    # Debug: Display the data being plotted
+    st.write(f"### Debug: Data Points for '{kpi_name}'")
+    st.dataframe(data_points)
+    
+    # Extract numerical month for proper sorting
+    def extract_month_number(time_period):
+        match = re.search(r'(\d+)', time_period)
+        return int(match.group(1)) if match else 0
 
+    data_points['Month_Number'] = data_points['Time Period'].apply(extract_month_number)
+    
+    # Sort by month number
+    data_points = data_points.sort_values('Month_Number')
+    
+    # Ensure 'Time Period' is ordered correctly
+    data_points['Time Period'] = pd.Categorical(
+        data_points['Time Period'],
+        categories=data_points['Time Period'],
+        ordered=True
+    )
+    
     # Calculate scenarios
     scenarios = {
         "Weak Scenario": data_points['Value'] * 0.8,
@@ -142,9 +160,6 @@ def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_descrip
     OPENAI_API_KEY = get_OPENAI_API_KEY()
     openai.api_key = OPENAI_API_KEY
     
-    # Define the number of time periods (e.g., months)
-    time_periods = [f"Month {i}" for i in range(1, 13)]
-    
     # Create a refined prompt for OpenAI to generate data
     prompt = (
         f"Generate a realistic set of monthly KPI values for the next 12 months based on the following details:\n\n"
@@ -207,12 +222,12 @@ def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_descrip
                 generated_data = json.loads(json_str)
             except json.JSONDecodeError as e:
                 st.error(f"Failed to parse JSON data from OpenAI response: {e}")
-                st.text("Generated Text:")
+                st.text("**Generated Text:**")
                 st.text(generated_text)  # For debugging purposes
                 return pd.DataFrame()
         else:
             st.error("No JSON code block found in OpenAI response.")
-            st.text("Generated Text:")
+            st.text("**Generated Text:**")
             st.text(generated_text)  # For debugging purposes
             return pd.DataFrame()
         
@@ -221,7 +236,7 @@ def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_descrip
             validate(instance=generated_data, schema=kpi_schema)
         except jsonschema.exceptions.ValidationError as ve:
             st.error(f"JSON data does not match the expected schema: {ve.message}")
-            st.text("Generated Data:")
+            st.text("**Generated Data:**")
             st.text(json.dumps(generated_data, indent=4))  # Display the incorrect data for debugging
             return pd.DataFrame()
         
@@ -538,7 +553,7 @@ def main():
                 st.markdown(f"- {target}")
             st.markdown(f"**Similar Companies’ Results:** {phase_info['Similar Companies’ Results']}")
             st.markdown(f"**Additional Creative Outputs:** {phase_info['Additional Creative Outputs']}")
-        
+
             # Display Risk Radar for POC phase
             if phase == "POC":
                 st.markdown(f"**Risk Radar:** {phase_info['Risk Radar']}")
@@ -612,7 +627,8 @@ def main():
                             # Validate required columns
                             if set(['time_period', 'value']).issubset([col.lower() for col in df.columns]):
                                 df.columns = [col.lower() for col in df.columns]
-                                st.session_state.kpi_data[kpi['name']] = df.rename(columns={'value': 'Value'})
+                                df = df.rename(columns={'time_period': 'Time Period', 'value': 'Value'})
+                                st.session_state.kpi_data[kpi['name']] = df
                                 st.success(f"Data uploaded successfully for '{kpi['name']}'")
                                 st.dataframe(df)
                             else:
@@ -643,7 +659,7 @@ def main():
                 # Manually Add Data
                 elif data_option == "Manually Add Data":
                     with st.expander(f"Add Data for {kpi['name']}"):
-                        time_period = st.text_input(f"Time Period for {kpi['name']} (e.g., Q1 2024)", key=f"time_{kpi['name']}")
+                        time_period = st.text_input(f"Time Period for {kpi['name']} (e.g., Month 13)", key=f"time_{kpi['name']}")
                         value = st.number_input(f"Value for {kpi['name']}", key=f"value_{kpi['name']}")
                         if st.button(f"Add Data Point for '{kpi['name']}'", key=f"add_{kpi['name']}"):
                             if time_period and value is not None:
