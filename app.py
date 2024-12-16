@@ -56,6 +56,13 @@ st.session_state.kpi_explanations = st.session_state.get("kpi_explanations", {})
 st.session_state.phase_outputs = st.session_state.get("phase_outputs", {})
 
 # Export Functions
+def insert_spaces(text, max_length=100):
+    """
+    Insert spaces into a long string to prevent FPDF from failing.
+    Splits the text every max_length characters.
+    """
+    return ' '.join([text[i:i+max_length] for i in range(0, len(text), max_length)])
+
 def export_kpis_csv(kpi_list):
     """Export KPIs as a CSV file."""
     df = pd.DataFrame(kpi_list)
@@ -82,17 +89,20 @@ def export_kpis_text(kpi_list):
 def export_kpis_pdf(kpi_list):
     """Export KPIs as a PDF file using fpdf2 with UTF-8 support."""
     pdf = FPDF()
+    
+    # Set margins (left, top, right)
+    pdf.set_margins(15, 15, 15)
+    pdf.set_auto_page_break(auto=True, margin=15)
+    
+    # Add the first page with the title
     pdf.add_page()
-    
-    # Optional: Add a Unicode font (requires the TTF file in your project directory)
-    # Uncomment the lines below if you wish to use a Unicode font
-    # pdf.add_font("DejaVu", "", "DejaVuSans.ttf", uni=True)
-    # pdf.set_font("DejaVu", size=12)
-    
-    # Title
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, "Selected KPIs", ln=True, align='C')
     pdf.ln(10)
+    
+    # Add a new page for KPI details
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
     
     for kpi in kpi_list:
         # KPI Name
@@ -101,10 +111,16 @@ def export_kpis_pdf(kpi_list):
         
         # KPI Description
         pdf.set_font("Arial", '', 12)
-        pdf.multi_cell(0, 10, f"Description: {kpi['description']}")
+        description = f"Description: {kpi['description']}"
+        # Handle long unbroken strings
+        if len(description.replace(" ", "")) > 100:
+            description = insert_spaces(description)
+        pdf.multi_cell(0, 10, description)
         
         # KPI Guidance
-        pdf.multi_cell(0, 10, f"Guidance: {kpi['guidance']}\n")
+        guidance = f"Guidance: {kpi['guidance']}"
+        pdf.multi_cell(0, 10, guidance)
+        pdf.ln(5)  # Add space between KPIs
     
     try:
         # Generate PDF as bytes
