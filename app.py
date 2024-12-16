@@ -475,6 +475,20 @@ def survey_page():
 def main():
     st.set_page_config(page_title="KPI Creation and Tracking Kit", layout="wide")
 
+    # **Temporary Debugging Code: Remove after resolving the issue**
+    """
+    try:
+        api_key_flat = st.secrets["openai_api_key"]
+        st.write("Successfully accessed flat OpenAI API key.")
+    except KeyError:
+        try:
+            api_key_nested = st.secrets["openai"]["api_key"]
+            st.write("Successfully accessed nested OpenAI API key.")
+        except KeyError:
+            st.error("OpenAI API key not found in Streamlit's secrets.")
+    """
+    # **End of Temporary Debugging Code**
+
     if not st.session_state.survey_completed:
         survey_page()
     else:
