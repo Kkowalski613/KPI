@@ -86,26 +86,12 @@ def plot_kpi_chart(kpi_name, data_points):
         ordered=True
     )
     
-    # Calculate scenarios
-    scenarios = {
-        "Weak Scenario": data_points['Value'] * 0.8,
-        "Medium Scenario": data_points['Value'],
-        "High Scenario": data_points['Value'] * 1.2
-    }
-
-    # Create DataFrame for scenarios
-    scenario_df = pd.DataFrame(scenarios, index=data_points['Time Period'])
-
-    # Melt the DataFrame for Plotly
-    melted_df = scenario_df.reset_index().melt(id_vars='Time Period', var_name='Scenario', value_name='Value')
-
     # Create the line chart
     fig = px.line(
-        melted_df,
+        data_points,
         x='Time Period',
         y='Value',
-        color='Scenario',
-        title=f"KPI: {kpi_name} - Scenarios",
+        title=f"KPI: {kpi_name}",
         markers=True,
         labels={"Value": kpi_name}
     )
@@ -628,9 +614,13 @@ def main():
                             if set(['time_period', 'value']).issubset([col.lower() for col in df.columns]):
                                 df.columns = [col.lower() for col in df.columns]
                                 df = df.rename(columns={'time_period': 'Time Period', 'value': 'Value'})
-                                st.session_state.kpi_data[kpi['name']] = df
-                                st.success(f"Data uploaded successfully for '{kpi['name']}'")
-                                st.dataframe(df)
+                                # Check if 'Value' is numeric
+                                if pd.api.types.is_numeric_dtype(df['Value']):
+                                    st.session_state.kpi_data[kpi['name']] = df
+                                    st.success(f"Data uploaded successfully for '{kpi['name']}'")
+                                    st.dataframe(df)
+                                else:
+                                    st.error("'Value' column must contain numeric data.")
                             else:
                                 st.error("Uploaded file must contain 'time_period' and 'value' columns.")
                         except Exception as e:
@@ -663,21 +653,28 @@ def main():
                         value = st.number_input(f"Value for {kpi['name']}", key=f"value_{kpi['name']}")
                         if st.button(f"Add Data Point for '{kpi['name']}'", key=f"add_{kpi['name']}"):
                             if time_period and value is not None:
-                                new_data = pd.DataFrame({"Time Period": [time_period], "Value": [value]})
-                                if kpi['name'] in st.session_state.kpi_data:
-                                    st.session_state.kpi_data[kpi['name']] = pd.concat(
-                                        [st.session_state.kpi_data[kpi['name']], new_data],
-                                        ignore_index=True
-                                    )
+                                # Validate 'Time Period' format
+                                if not re.match(r'^Month\s+\d+$', time_period):
+                                    st.error("Time Period must be in the format 'Month X', where X is a number (e.g., 'Month 13').")
                                 else:
-                                    st.session_state.kpi_data[kpi['name']] = new_data
-                                st.success(f"Data point added for '{kpi['name']}'")
+                                    new_data = pd.DataFrame({"Time Period": [time_period], "Value": [value]})
+                                    if kpi['name'] in st.session_state.kpi_data:
+                                        st.session_state.kpi_data[kpi['name']] = pd.concat(
+                                            [st.session_state.kpi_data[kpi['name']], new_data],
+                                            ignore_index=True
+                                        )
+                                    else:
+                                        st.session_state.kpi_data[kpi['name']] = new_data
+                                    st.success(f"Data point added for '{kpi['name']}'")
                             else:
                                 st.error("Please provide both Time Period and Value.")
 
                 # Display Data and Plot
                 if kpi['name'] in st.session_state.kpi_data:
                     df = st.session_state.kpi_data[kpi['name']]
+                    # Remove 'Month_Number' if exists from previous plots
+                    if 'Month_Number' in df.columns:
+                        df = df.drop(columns=['Month_Number'])
                     st.write(f"### Data for '{kpi['name']}'")
                     st.dataframe(df)
                     # Plotting with Plotly
