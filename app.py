@@ -125,10 +125,13 @@ def get_openai_api_key():
     try:
         return st.secrets["openai_api_key"]
     except KeyError:
-        st.error(
-            "OpenAI API key not found. Please set `openai_api_key` in Streamlit's secrets."
-        )
-        st.stop()
+        try:
+            return st.secrets["openai"]["api_key"]
+        except KeyError:
+            st.error(
+                "OpenAI API key not found. Please set `openai_api_key` or `openai.api_key` in Streamlit's secrets."
+            )
+            st.stop()
 
 def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_description):
     """
@@ -149,7 +152,7 @@ def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_descrip
         f"Product Audience: {product_audience}\n"
         f"KPI Name: {kpi_name}\n"
         f"KPI Description: {kpi_description}\n\n"
-        f"Provide the data in a JSON format with 'Time Period' and 'Value' keys."
+        f"Assume the company operates similarly to Zillow. Provide the data in a JSON format with 'Time Period' and 'Value' keys."
     )
     
     try:
@@ -189,8 +192,14 @@ def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_descrip
         
         return df
     
+    except openai.error.RateLimitError:
+        st.error("OpenAI API rate limit exceeded. Please try again later.")
+        return pd.DataFrame()
+    except openai.error.OpenAIError as e:
+        st.error(f"OpenAI API error: {e}")
+        return pd.DataFrame()
     except Exception as e:
-        st.error(f"Error generating data with OpenAI: {e}")
+        st.error(f"An unexpected error occurred: {e}")
         return pd.DataFrame()
 
 # -------------------- KPI Explanation Function --------------------
@@ -208,12 +217,11 @@ def explain_kpis(kpi_list):
 
 def get_predefined_kpis(phase, survey_responses):
     """
-    Returns a list of KPIs based on the phase and survey responses.
+    Returns a list of practical KPIs based on the phase and survey responses.
     """
     industry = survey_responses.get("Industry", "General")
     product_audience = survey_responses.get("Product Audience", "General")
     
-    # Example KPI templates; expand as needed
     predefined_kpis = {
         "POC": [
             {
