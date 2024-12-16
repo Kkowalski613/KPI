@@ -68,9 +68,9 @@ def plot_kpi_chart(kpi_name, data_points):
 
     # Calculate scenarios
     scenarios = {
-        "Weak": data_points['Value'] * 0.8,
-        "Medium": data_points['Value'],
-        "High": data_points['Value'] * 1.2
+        "Weak Scenario": data_points['Value'] * 0.8,
+        "Medium Scenario": data_points['Value'],
+        "High Scenario": data_points['Value'] * 1.2
     }
 
     # Create DataFrame for scenarios
@@ -121,13 +121,23 @@ def plot_kpi_chart(kpi_name, data_points):
 
 # -------------------- OpenAI Data Generation --------------------
 
+def get_openai_api_key():
+    try:
+        return st.secrets["openai_api_key"]
+    except KeyError:
+        st.error(
+            "OpenAI API key not found. Please set `openai_api_key` in Streamlit's secrets."
+        )
+        st.stop()
+
 def generate_focused_fake_data(industry, product_audience, kpi_name, kpi_description):
     """
     Generate fake data based on Industry, Product Audience, and KPI using OpenAI.
     Returns a pandas DataFrame with 'Time Period' and 'Value'.
     """
     # Initialize OpenAI API key
-    openai.api_key = st.secrets["openai_api_key"]
+    openai_api_key = get_openai_api_key()
+    openai.api_key = openai_api_key
     
     # Define the number of time periods (e.g., months)
     time_periods = [f"Month {i}" for i in range(1, 13)]
